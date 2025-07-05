@@ -1,7 +1,7 @@
 //! Parser implementations
 
 use crate::{
-    book::{BookInfo, Chapter},
+    book::{BookInfo, Chapter, UrlCache},
     client::Client,
     error::Error,
 };
@@ -16,17 +16,13 @@ pub use ranobes_top::RanobesParser;
 #[async_trait]
 pub trait Downloader {
     /// Returns the novel's landing page HTML
-    async fn get_book_info<'a>(&self, client: &mut Client<'a>, url: &str) -> Result<String, Error>;
+    async fn get_book_info(&self, client: &mut Client, url: &str) -> Result<String, Error>;
 
     /// Returns a list of URLs for each chapter (in order)
-    async fn get_chapterlist<'a>(
-        &self,
-        client: &mut Client<'a>,
-        html: &str,
-    ) -> Result<Vec<String>, Error>;
+    async fn get_chapterlist(&self, client: &mut Client, html: &str) -> Result<UrlCache, Error>;
 
     /// Returns the chapter's HTML
-    async fn get_chapter<'a>(&self, client: &mut Client<'a>, url: &str) -> Result<String, Error>;
+    async fn get_chapter(&self, client: &mut Client, url: &str) -> Result<String, Error>;
 }
 
 pub trait Parser {
@@ -58,23 +54,19 @@ impl TryFrom<&str> for WnParser {
 
 #[async_trait]
 impl Downloader for WnParser {
-    async fn get_book_info<'a>(&self, client: &mut Client<'a>, url: &str) -> Result<String, Error> {
+    async fn get_book_info(&self, client: &mut Client, url: &str) -> Result<String, Error> {
         match self {
             WnParser::Ranobes(parser) => parser.get_book_info(client, url).await,
         }
     }
 
-    async fn get_chapterlist<'a>(
-        &self,
-        client: &mut Client<'a>,
-        html: &str,
-    ) -> Result<Vec<String>, Error> {
+    async fn get_chapterlist(&self, client: &mut Client, html: &str) -> Result<UrlCache, Error> {
         match self {
             WnParser::Ranobes(parser) => parser.get_chapterlist(client, html).await,
         }
     }
 
-    async fn get_chapter<'a>(&self, client: &mut Client<'a>, url: &str) -> Result<String, Error> {
+    async fn get_chapter(&self, client: &mut Client, url: &str) -> Result<String, Error> {
         match self {
             WnParser::Ranobes(parser) => parser.get_chapter(client, url).await,
         }

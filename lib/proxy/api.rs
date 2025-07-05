@@ -87,19 +87,24 @@ impl Api {
         })
     }
 
-    /// Restarts the proxy. Can timeout.
-    pub async fn restart(&self) -> Result<(), Error> {
-        let _ = self.put_state("stopped").await;
-        std::thread::sleep(Duration::from_millis(1000));
-        let _ = self.put_state("running").await;
-        match timeout(Duration::from_secs(60), self.wait_for_proxy()).await {
+    /// Wait for proxy to be good
+    pub async fn wait(&self, seconds: u64) -> Result<(), Error> {
+        match timeout(Duration::from_secs(seconds), self._infinite_wait()).await {
             Ok(_) => Ok(()),
             Err(_) => Err(Error::timeout("waiting for proxy timed out")),
         }
     }
 
+    /// Restarts the proxy. Can timeout.
+    pub async fn restart(&self) -> Result<(), Error> {
+        let _ = self.put_state("stopped").await;
+        std::thread::sleep(Duration::from_millis(1000));
+        let _ = self.put_state("running").await;
+        self.wait(60).await
+    }
+
     /// Wait for proxy to become good. Infinite loop.
-    async fn wait_for_proxy(&self) {
+    async fn _infinite_wait(&self) {
         loop {
             match self.status().await {
                 Ok(ProxyStatus::Running) => break,

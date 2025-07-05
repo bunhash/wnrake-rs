@@ -5,8 +5,8 @@
 //! [https://github.com/qdm12/gluetun](https://github.com/qdm12/gluetun)
 
 use crate::error::Error;
-use base64::{engine::general_purpose::STANDARD, Engine};
-use reqwest::header::{HeaderMap, HeaderName, HeaderValue, AUTHORIZATION};
+use base64::{Engine, engine::general_purpose::STANDARD};
+use reqwest::header::{AUTHORIZATION, HeaderMap, HeaderName, HeaderValue};
 
 #[derive(Clone, Debug)]
 pub enum Credentials {

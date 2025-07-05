@@ -1,35 +1,32 @@
 //! Flaresolverr Client
 
 use crate::{
+    cache::Cache,
     error::{Error, ErrorType},
     proxy::Proxy,
     solution::Response,
 };
 use serde_json::{Map, Number, Value};
-use std::{fmt, time::Duration};
+use std::time::Duration;
 
 #[derive(Clone, Debug)]
-pub struct Client<'a> {
+pub struct Client {
     client: reqwest::Client,
     solver: String,
     timeout: Duration,
-    proxy: Option<&'a Proxy>,
+    proxy: Option<Proxy>,
     session: Option<String>,
+    cache: Option<Cache>,
 }
 
-impl fmt::Display for Client<'_> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
-    }
-}
-
-impl Client<'_> {
+impl Client {
     /// Creates a new Client
-    pub(crate) fn new_internal<'a>(
+    pub(crate) fn new_internal(
         solver: String,
         timeout: Duration,
-        proxy: Option<&'a Proxy>,
-    ) -> Client<'a> {
+        proxy: Option<Proxy>,
+        cache: Option<Cache>,
+    ) -> Client {
         let client = reqwest::Client::new();
         Client {
             client,
@@ -37,17 +34,47 @@ impl Client<'_> {
             timeout,
             proxy,
             session: None,
+            cache,
         }
     }
 
+    pub fn builder(solver: &str) -> ClientBuilder {
+        ClientBuilder::new(solver)
+    }
+
     /// Creates a new Client
-    pub fn new(solver: &str) -> Client<'_> {
-        Client::new_internal(solver.into(), Duration::new(60, 0), None)
+    pub fn new(solver: &str) -> Client {
+        Client::new_internal(solver.into(), Duration::from_secs(60), None, None)
     }
 
     /// Creates a new Client with a proxy configuration
-    pub fn with_proxy<'a>(solver: &str, proxy: &'a Proxy) -> Client<'a> {
-        Client::new_internal(solver.into(), Duration::new(60, 0), Some(proxy))
+    pub fn with_proxy(solver: &str, proxy: Proxy) -> Client {
+        Client::new_internal(solver.into(), Duration::from_secs(60), Some(proxy), None)
+    }
+
+    /// Get solver URL
+    pub fn solver(&self) -> &str {
+        self.solver.as_ref()
+    }
+
+    /// Get timeout
+    pub fn timeout(&self) -> &Duration {
+        &self.timeout
+    }
+
+    /// Get proxy
+    pub fn proxy(&self) -> Option<&Proxy> {
+        self.proxy.as_ref()
+    }
+
+    /// Get session
+    pub fn session(&self) -> Option<&str> {
+        self.session.as_deref()
+    }
+
+    /// Get cache handler
+    pub fn cache(&self) -> Option<&Cache> {
+        self.cache.as_ref()
     }
 
     async fn post_data(&self, data: &Map<String, Value>) -> Result<Response, Error> {
@@ -71,7 +98,7 @@ impl Client<'_> {
         // { "cmd" : "sessions.create", "proxy" : { "url" : <proxy> } }
         let mut data = Map::new();
         data.insert("cmd".into(), Value::String("sessions.create".into()));
-        if let Some(proxy) = self.proxy {
+        if let Some(proxy) = &self.proxy {
             data.insert("proxy".into(), proxy.to_json());
         }
 
@@ -130,9 +157,7 @@ impl Client<'_> {
         }
     }
 
-    /// Does a HTTP GET on the URL, solving a CloudFlare challenge, if necessary. Will attempt 3
-    /// times.
-    pub async fn get(&mut self, url: &str) -> Result<String, Error> {
+    async fn fetch(&mut self, url: &str) -> Result<String, Error> {
         let max_attempts = 3;
         let mut cur_attempt = 1;
         loop {
@@ -147,12 +172,72 @@ impl Client<'_> {
 
                     // Reset proxy
                     self.destroy_session().await?;
-                    if let Some(proxy) = self.proxy {
+                    if let Some(proxy) = &self.proxy {
                         proxy.restart().await?;
                     }
                     self.create_session().await?;
                 }
             }
         }
+    }
+
+    /// Does a HTTP GET on the URL, solving a CloudFlare challenge, if necessary. Will attempt 3
+    /// times.
+    pub async fn get(&mut self, url: &str) -> Result<String, Error> {
+        let has_cache = self.cache.is_some();
+        if has_cache {
+            let res = self.cache.as_ref().expect("cache should exist").get(url)?;
+            match res {
+                Some(res) => Ok(res),
+                None => {
+                    let res = self.fetch(url).await?;
+                    self.cache
+                        .as_ref()
+                        .expect("cache should exist")
+                        .insert(url, res.as_bytes())?;
+                    Ok(res)
+                }
+            }
+        } else {
+            self.fetch(url).await
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct ClientBuilder {
+    solver: String,
+    timeout: Duration,
+    proxy: Option<Proxy>,
+    cache: Option<Cache>,
+}
+
+impl ClientBuilder {
+    pub fn new(solver: &str) -> Self {
+        ClientBuilder {
+            solver: solver.into(),
+            timeout: Duration::from_secs(60),
+            proxy: None,
+            cache: None,
+        }
+    }
+
+    pub fn timeout(mut self, timeout: Duration) -> Self {
+        self.timeout = timeout;
+        self
+    }
+
+    pub fn proxy(mut self, proxy: Proxy) -> Self {
+        self.proxy = Some(proxy);
+        self
+    }
+
+    pub fn cache(mut self, cache: Cache) -> Self {
+        self.cache = Some(cache);
+        self
+    }
+
+    pub fn build(self) -> Client {
+        Client::new_internal(self.solver, self.timeout, self.proxy, self.cache)
     }
 }

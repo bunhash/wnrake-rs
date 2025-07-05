@@ -6,7 +6,6 @@
 
 use crate::error::Error;
 use serde_json::{Map, Value};
-use std::fmt;
 
 mod api;
 mod auth;
@@ -24,14 +23,9 @@ pub enum ProxyStatus {
 #[derive(Clone, Debug)]
 pub struct Proxy {
     pub(crate) url: String,
-    pub(crate) credentials: Option<Credentials>,
+    pub(crate) username: Option<String>,
+    pub(crate) password: Option<String>,
     pub(crate) api: Option<Api>,
-}
-
-impl fmt::Display for Proxy {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
-    }
 }
 
 impl Proxy {
@@ -39,7 +33,8 @@ impl Proxy {
     pub fn new(url: &str) -> Self {
         Proxy {
             url: url.into(),
-            credentials: None,
+            username: None,
+            password: None,
             api: None,
         }
     }
@@ -48,9 +43,15 @@ impl Proxy {
     pub fn with_api(url: &str, api: Api) -> Self {
         Proxy {
             url: url.into(),
-            credentials: None,
+            username: None,
+            password: None,
             api: Some(api),
         }
+    }
+
+    /// Creates a proxy builder
+    pub fn builder(url: &str) -> ProxyBuilder {
+        ProxyBuilder::new(url)
     }
 
     /// Returns a reference to the URL
@@ -58,12 +59,17 @@ impl Proxy {
         self.url.as_ref()
     }
 
-    /// Returns a reference to the control server
-    pub fn credentials(&self) -> Option<&Credentials> {
-        self.credentials.as_ref()
+    /// Returns a reference to the username
+    pub fn username(&self) -> Option<&str> {
+        self.username.as_deref()
     }
 
-    /// Returns a reference to the control server
+    /// Returns a reference to the password
+    pub fn password(&self) -> Option<&str> {
+        self.password.as_deref()
+    }
+
+    /// Returns a reference to the API URL
     pub fn api(&self) -> Option<&Api> {
         self.api.as_ref()
     }
@@ -84,6 +90,14 @@ impl Proxy {
         }
     }
 
+    /// Wait for the proxy to be good
+    pub async fn wait(&self, seconds: u64) -> Result<(), Error> {
+        match &self.api {
+            Some(api) => api.wait(seconds).await,
+            None => Ok(()),
+        }
+    }
+
     /// Restarts the proxy. Can timeout.
     pub async fn restart(&self) -> Result<(), Error> {
         match &self.api {
@@ -96,9 +110,11 @@ impl Proxy {
     pub(crate) fn to_json(&self) -> Value {
         let mut map = Map::new();
         map.insert("url".into(), Value::String(self.url.clone()));
-        if let Some(Credentials::BasicAuth(creds)) = &self.credentials {
-            map.insert("username".into(), Value::String(creds.username().into()));
-            map.insert("password".into(), Value::String(creds.password().into()));
+        if let Some(username) = self.username() {
+            map.insert("username".into(), Value::String(username.into()));
+            if let Some(password) = self.username() {
+                map.insert("password".into(), Value::String(password.into()));
+            }
         }
         Value::Object(map)
     }
@@ -106,7 +122,8 @@ impl Proxy {
 
 pub struct ProxyBuilder {
     url: String,
-    credentials: Option<Credentials>,
+    username: Option<String>,
+    password: Option<String>,
     api: Option<Api>,
 }
 
@@ -115,14 +132,21 @@ impl ProxyBuilder {
     pub fn new(url: &str) -> Self {
         ProxyBuilder {
             url: url.into(),
-            credentials: None,
+            username: None,
+            password: None,
             api: None,
         }
     }
 
     /// Adds basic auth credentials to the proxy
-    pub fn credentials(mut self, username: &str, password: &str) -> Self {
-        self.credentials = Some(Credentials::basic(username, password));
+    pub fn username(mut self, username: &str) -> Self {
+        self.username = Some(username.into());
+        self
+    }
+
+    /// Adds basic auth credentials to the proxy
+    pub fn password(mut self, password: &str) -> Self {
+        self.password = Some(password.into());
         self
     }
 
@@ -136,7 +160,8 @@ impl ProxyBuilder {
     pub fn build(self) -> Proxy {
         Proxy {
             url: self.url,
-            credentials: self.credentials,
+            username: self.username,
+            password: self.password,
             api: self.api,
         }
     }

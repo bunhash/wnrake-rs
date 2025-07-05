@@ -1,4 +1,4 @@
-//! error
+//! Errors
 
 use std::fmt;
 
@@ -6,6 +6,9 @@ use std::fmt;
 pub enum ErrorType {
     /// HTML parsing errors
     Html,
+
+    /// IO errors
+    Io,
 
     /// JSON parsing errors
     Json,
@@ -30,6 +33,7 @@ impl fmt::Display for ErrorType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             ErrorType::Html => f.write_str("html"),
+            ErrorType::Io => f.write_str("io"),
             ErrorType::Json => f.write_str("json"),
             ErrorType::Parser => f.write_str("parser"),
             ErrorType::Solution => f.write_str("solution"),
@@ -49,6 +53,12 @@ pub struct Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}: {}", self.error_type, self.message)
+    }
+}
+
+impl From<std::io::Error> for Error {
+    fn from(error: std::io::Error) -> Error {
+        Error::io(error)
     }
 }
 
@@ -72,6 +82,13 @@ impl Error {
     pub fn html(msg: impl fmt::Display) -> Error {
         Error {
             error_type: ErrorType::Html,
+            message: format!("{}", msg),
+        }
+    }
+
+    pub fn io(msg: impl fmt::Display) -> Error {
+        Error {
+            error_type: ErrorType::Io,
             message: format!("{}", msg),
         }
     }

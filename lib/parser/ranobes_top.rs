@@ -1,7 +1,7 @@
 //! ranobes.top parser
 
 use crate::{
-    book::{BookInfo, Chapter},
+    book::{BookInfo, Chapter, UrlCache},
     client::Client,
     error::Error,
     parser::{Downloader, Parser},
@@ -15,7 +15,7 @@ pub struct RanobesParser;
 
 #[async_trait]
 impl Downloader for RanobesParser {
-    async fn get_book_info<'a>(&self, client: &mut Client<'a>, url: &str) -> Result<String, Error> {
+    async fn get_book_info(&self, client: &mut Client, url: &str) -> Result<String, Error> {
         let res = client.get(url).await?;
         let document = Html::parse_document(&res);
         match document
@@ -27,11 +27,7 @@ impl Downloader for RanobesParser {
         }
     }
 
-    async fn get_chapterlist<'a>(
-        &self,
-        client: &mut Client<'a>,
-        html: &str,
-    ) -> Result<Vec<String>, Error> {
+    async fn get_chapterlist(&self, client: &mut Client, html: &str) -> Result<UrlCache, Error> {
         let (total_toc_pages, more_chapters) = {
             let document = Html::parse_document(&html);
 
@@ -57,7 +53,7 @@ impl Downloader for RanobesParser {
         };
 
         // Get all chapter URLs
-        let mut chapterlist: Vec<String> = Vec::new();
+        let mut chapterlist = UrlCache::new();
         let mut url = more_chapters.clone();
         for page in 0..total_toc_pages {
             let res = client.get(&url).await?;
@@ -65,16 +61,13 @@ impl Downloader for RanobesParser {
             for script in doc.select(&Selector::parse("script")?) {
                 let text = script.text().collect::<Vec<_>>().join("");
                 if text.contains("window.__DATA__") {
-                    let json: Value = serde_json::from_str(
-                        text.trim()
-                            .strip_prefix("window.__DATA__ = ")
-                            .ok_or(Error::html("not window.__DATA__?"))?,
-                    )
-                    .map_err(Error::json)?;
+                    let json: Value =
+                        serde_json::from_str(text.trim().trim_start_matches("window.__DATA__ = "))
+                            .map_err(Error::json)?;
                     match &json["chapters"] {
                         Value::Array(chapters) => {
                             for chapter in chapters {
-                                chapterlist.insert(
+                                chapterlist.0.insert(
                                     0,
                                     chapter["link"]
                                         .as_str()
@@ -95,7 +88,7 @@ impl Downloader for RanobesParser {
         Ok(chapterlist)
     }
 
-    async fn get_chapter<'a>(&self, client: &mut Client<'a>, url: &str) -> Result<String, Error> {
+    async fn get_chapter(&self, client: &mut Client, url: &str) -> Result<String, Error> {
         let res = client.get(url).await?;
         let document = Html::parse_document(&res);
         match document.select(&Selector::parse("div#arrticle")?).next() {
@@ -127,7 +120,7 @@ impl Parser for RanobesParser {
             .join("");
 
         // Get author
-        let author = span_1.trim().strip_prefix("by").unwrap_or(&span_1).trim();
+        let author = span_1.trim().trim_start_matches("by").trim();
 
         // Get title
         let title = if span_0.attr("hidden").is_some() {
@@ -265,10 +258,7 @@ impl RanobesParser {
             .text()
             .collect::<Vec<_>>()
             .join("");
-        let num_chapters = num_chapters
-            .strip_suffix("chapters")
-            .unwrap_or(&num_chapters)
-            .trim();
+        let num_chapters = num_chapters.trim_start_matches("chapters").trim();
         u32::from_str_radix(num_chapters, 10).map_err(Error::html)
     }
 }
