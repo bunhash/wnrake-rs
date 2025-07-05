@@ -28,15 +28,23 @@ impl BookInfo {
     }
 
     pub fn from_file(path: &str) -> Result<Self, Error> {
-        let mut bookinfo = BookInfo::new();
+        let mut title = String::new();
+        let mut author = String::new();
+        let mut url = String::new();
+
         let mut file = io::BufReader::new(File::open(path)?);
-        file.read_line(&mut bookinfo.title)?;
-        file.read_line(&mut bookinfo.author)?;
-        file.read_line(&mut bookinfo.url)?;
-        if bookinfo.title.is_empty() || bookinfo.author.is_empty() || bookinfo.url.is_empty() {
+        file.read_line(&mut title)?;
+        file.read_line(&mut author)?;
+        file.read_line(&mut url)?;
+
+        if title.is_empty() || author.is_empty() || url.is_empty() {
             Err(Error::parser("invalid bookinfo file"))
         } else {
-            Ok(bookinfo)
+            Ok(BookInfo {
+                title: title.trim().to_string(),
+                author: author.trim().to_string(),
+                url: url.trim().to_string(),
+            })
         }
     }
 

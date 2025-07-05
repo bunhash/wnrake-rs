@@ -11,6 +11,7 @@ use html5ever::tree_builder::TreeSink;
 use scraper::{Html, HtmlTreeSink, Selector};
 use serde_json::Value;
 
+#[derive(Clone, Debug)]
 pub struct RanobesParser;
 
 #[async_trait]
@@ -32,12 +33,14 @@ impl Downloader for RanobesParser {
             let document = Html::parse_document(&html);
 
             // Calculate the total TOC pages (25 chapters per page)
-            let total_toc_pages = self
-                .get_total_chapters(&document)?
+            let total_chapters = self.get_total_chapters(&document)?;
+            log::info!("Total chapters: {}", total_chapters);
+            let total_toc_pages = total_chapters
                 .checked_add(24)
                 .ok_or(Error::html("bad chapter count"))?
                 .checked_div(25)
                 .ok_or(Error::html("bad chapter count"))?;
+            log::info!("Total TOC pages: {}", total_toc_pages);
 
             // Get TOC base URL
             let more_chapters = document
@@ -258,7 +261,7 @@ impl RanobesParser {
             .text()
             .collect::<Vec<_>>()
             .join("");
-        let num_chapters = num_chapters.trim_start_matches("chapters").trim();
+        let num_chapters = num_chapters.trim_end_matches("chapters").trim();
         u32::from_str_radix(num_chapters, 10).map_err(Error::html)
     }
 }

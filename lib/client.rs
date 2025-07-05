@@ -80,6 +80,7 @@ impl Client {
     async fn post_data(&self, data: &Map<String, Value>) -> Result<Response, Error> {
         // Send HTTP Post
         let res = self.client.post(&self.solver).json(&data).send().await?;
+        log::info!("solver response: {:?}", &res);
 
         // Parse JSON
         let res = res.json::<Response>().await.map_err(Error::json)?;
@@ -88,6 +89,7 @@ impl Client {
         if res.status == "ok" {
             Ok(res)
         } else {
+            log::info!("solution error {:?}", &res);
             Err(Error::solution(&res.message))
         }
     }
@@ -106,6 +108,7 @@ impl Client {
         let res = self.post_data(&data).await?;
         match res.session {
             Some(session) => {
+                log::info!("created session: {}", &session);
                 self.session = Some(session);
                 Ok(())
             }
@@ -124,6 +127,7 @@ impl Client {
 
             // Send command
             self.client.post(&self.solver).json(&data).send().await?;
+            log::info!("destroyed session: {}", &session);
             self.session = None;
         }
         Ok(())
@@ -158,6 +162,7 @@ impl Client {
     }
 
     async fn fetch(&mut self, url: &str) -> Result<String, Error> {
+        log::info!("fetching {}", url);
         let max_attempts = 3;
         let mut cur_attempt = 1;
         loop {
@@ -168,16 +173,19 @@ impl Client {
                     if e.error_type != ErrorType::Solution || cur_attempt >= max_attempts {
                         return Err(e);
                     }
-                    cur_attempt = cur_attempt + 1;
 
                     // Reset proxy
+                    log::info!("Solution error. Resetting session");
                     self.destroy_session().await?;
                     if let Some(proxy) = &self.proxy {
+                        log::info!("Resetting proxy");
                         proxy.restart().await?;
                     }
                     self.create_session().await?;
                 }
             }
+            log::info!("failed attempts: {}", cur_attempt);
+            cur_attempt = cur_attempt + 1;
         }
     }
 
@@ -188,8 +196,12 @@ impl Client {
         if has_cache {
             let res = self.cache.as_ref().expect("cache should exist").get(url)?;
             match res {
-                Some(res) => Ok(res),
+                Some(res) => {
+                    log::info!("{} found in cache", url);
+                    Ok(res)
+                }
                 None => {
+                    log::info!("{} not found in cache", url);
                     let res = self.fetch(url).await?;
                     self.cache
                         .as_ref()

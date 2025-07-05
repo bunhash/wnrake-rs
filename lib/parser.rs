@@ -36,6 +36,7 @@ pub trait Parser {
     fn next_page(&self, html: &str) -> Result<Option<String>, Error>;
 }
 
+#[derive(Clone, Debug)]
 pub enum WnParser {
     Ranobes(RanobesParser),
 }

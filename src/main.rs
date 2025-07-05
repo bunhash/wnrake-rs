@@ -15,9 +15,13 @@ mod parse;
 #[derive(Parser, Clone, Debug)]
 #[command(version, about, long_about = None)]
 struct Cli {
+    /// Debug logging
+    #[arg(long)]
+    debug: bool,
+
     /// Verbose logging
-    #[arg(short, action = clap::ArgAction::Count)]
-    verbose: u8,
+    #[arg(short, long)]
+    verbose: bool,
 
     /// Configuration file
     #[arg(short = 'f')]
@@ -77,11 +81,12 @@ async fn dispatcher() -> Result<(), Error> {
     // Initialize
     SimpleLogger::new()
         .with_colors(true)
-        .with_level(match cli.verbose {
-            0 => LevelFilter::Warn,
-            1 => LevelFilter::Info,
-            2 => LevelFilter::Debug,
-            _ => LevelFilter::Trace,
+        .with_level(if cli.debug {
+            LevelFilter::Debug
+        } else if cli.verbose {
+            LevelFilter::Info
+        } else {
+            LevelFilter::Warn
         })
         .init()
         .expect("failed to initialize logger");
