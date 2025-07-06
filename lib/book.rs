@@ -63,6 +63,18 @@ impl BookInfo {
 #[derive(Clone, Debug)]
 pub struct UrlCache(pub Vec<String>);
 
+impl AsRef<Vec<String>> for UrlCache {
+    fn as_ref(&self) -> &Vec<String> {
+        &self.0
+    }
+}
+
+impl AsMut<Vec<String>> for UrlCache {
+    fn as_mut(&mut self) -> &mut Vec<String> {
+        &mut self.0
+    }
+}
+
 impl UrlCache {
     pub fn new() -> Self {
         UrlCache(Vec::new())
@@ -108,6 +120,18 @@ pub struct ChapterInfo {
 
 #[derive(Clone, Debug)]
 pub struct ChapterList(pub Vec<ChapterInfo>);
+
+impl AsRef<Vec<ChapterInfo>> for ChapterList {
+    fn as_ref(&self) -> &Vec<ChapterInfo> {
+        &self.0
+    }
+}
+
+impl AsMut<Vec<ChapterInfo>> for ChapterList {
+    fn as_mut(&mut self) -> &mut Vec<ChapterInfo> {
+        &mut self.0
+    }
+}
 
 impl ChapterList {
     pub fn new() -> Self {

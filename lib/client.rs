@@ -80,7 +80,7 @@ impl Client {
     async fn post_data(&self, data: &Map<String, Value>) -> Result<Response, Error> {
         // Send HTTP Post
         let res = self.client.post(&self.solver).json(&data).send().await?;
-        log::info!("solver response: {:?}", &res);
+        log::debug!("solver response: {:?}", &res);
 
         // Parse JSON
         let res = res.json::<Response>().await.map_err(Error::json)?;
@@ -89,7 +89,7 @@ impl Client {
         if res.status == "ok" {
             Ok(res)
         } else {
-            log::info!("solution error {:?}", &res);
+            log::debug!("solution error {:?}", &res);
             Err(Error::solution(&res.message))
         }
     }
@@ -108,7 +108,7 @@ impl Client {
         let res = self.post_data(&data).await?;
         match res.session {
             Some(session) => {
-                log::info!("created session: {}", &session);
+                log::debug!("created session: {}", &session);
                 self.session = Some(session);
                 Ok(())
             }
@@ -127,13 +127,13 @@ impl Client {
 
             // Send command
             self.client.post(&self.solver).json(&data).send().await?;
-            log::info!("destroyed session: {}", &session);
+            log::debug!("destroyed session: {}", &session);
             self.session = None;
         }
         Ok(())
     }
 
-    async fn get_single(&mut self, url: &str) -> Result<String, Error> {
+    async fn get_single(&mut self, url: &str, xpath: Option<&str>) -> Result<String, Error> {
         // Build the JSON request
         // { "cmd" : "request.get", "url" : <url>, "maxTimeout" : <timeout>, "session" : <session> }
         let mut data = Map::new();
@@ -143,6 +143,9 @@ impl Client {
             "maxTimeout".into(),
             Value::Number(Number::from_u128(self.timeout.as_millis()).expect("bad duration value")),
         );
+        if let Some(val) = xpath {
+            data.insert("xpath".into(), Value::String(val.into()));
+        }
         if let Some(session) = &self.session {
             data.insert("session".into(), Value::String(session.into()));
         }
@@ -161,12 +164,12 @@ impl Client {
         }
     }
 
-    async fn fetch(&mut self, url: &str) -> Result<String, Error> {
-        log::info!("fetching {}", url);
+    async fn fetch(&mut self, url: &str, xpath: Option<&str>) -> Result<String, Error> {
+        log::debug!("fetching {}", url);
         let max_attempts = 3;
         let mut cur_attempt = 1;
         loop {
-            match self.get_single(url).await {
+            match self.get_single(url, xpath).await {
                 Ok(res) => return Ok(res),
                 Err(e) => {
                     // If try again
@@ -174,35 +177,42 @@ impl Client {
                         return Err(e);
                     }
 
-                    // Reset proxy
-                    log::info!("Solution error. Resetting session");
+                    log::warn!(
+                        "Attempt ({}/{}): failed to download {}",
+                        cur_attempt,
+                        max_attempts,
+                        url
+                    );
+
+                    // Reset session and proxy
+                    log::debug!("Solution error. Resetting session");
                     self.destroy_session().await?;
                     if let Some(proxy) = &self.proxy {
-                        log::info!("Resetting proxy");
+                        log::debug!("Resetting proxy");
                         proxy.restart().await?;
                     }
                     self.create_session().await?;
                 }
             }
-            log::info!("failed attempts: {}", cur_attempt);
+            log::debug!("failed attempts: {}", cur_attempt);
             cur_attempt = cur_attempt + 1;
         }
     }
 
     /// Does a HTTP GET on the URL, solving a CloudFlare challenge, if necessary. Will attempt 3
     /// times.
-    pub async fn get(&mut self, url: &str) -> Result<String, Error> {
+    pub async fn get(&mut self, url: &str, xpath: Option<&str>) -> Result<String, Error> {
         let has_cache = self.cache.is_some();
         if has_cache {
             let res = self.cache.as_ref().expect("cache should exist").get(url)?;
             match res {
                 Some(res) => {
-                    log::info!("{} found in cache", url);
+                    log::debug!("{} found in cache", url);
                     Ok(res)
                 }
                 None => {
-                    log::info!("{} not found in cache", url);
-                    let res = self.fetch(url).await?;
+                    log::debug!("{} not found in cache", url);
+                    let res = self.fetch(url, xpath).await?;
                     self.cache
                         .as_ref()
                         .expect("cache should exist")
@@ -211,7 +221,7 @@ impl Client {
                 }
             }
         } else {
-            self.fetch(url).await
+            self.fetch(url, xpath).await
         }
     }
 }

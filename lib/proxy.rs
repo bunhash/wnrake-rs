@@ -6,6 +6,7 @@
 
 use crate::error::Error;
 use serde_json::{Map, Value};
+use std::fmt;
 
 mod api;
 mod auth;
@@ -13,11 +14,21 @@ mod auth;
 pub use api::Api;
 pub use auth::{BasicAuth, Credentials};
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialOrd, PartialEq, Ord, Eq)]
 pub enum ProxyStatus {
     Running,
     Stopped,
     Unknown,
+}
+
+impl fmt::Display for ProxyStatus {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ProxyStatus::Running => f.write_str("running"),
+            ProxyStatus::Stopped => f.write_str("stopped"),
+            ProxyStatus::Unknown => f.write_str("unknown"),
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -93,7 +104,7 @@ impl Proxy {
     /// Wait for the proxy to be good
     pub async fn wait(&self, seconds: u64) -> Result<(), Error> {
         match &self.api {
-            Some(api) => api.wait(seconds).await,
+            Some(api) => api.wait_for_ip(seconds).await,
             None => Ok(()),
         }
     }

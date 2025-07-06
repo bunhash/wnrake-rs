@@ -1,6 +1,6 @@
 //! parse command
 
-use crate::config::ConfigParams;
+use crate::config::Config;
 use clap::Args;
 use wnrake::{error::Error, parser::WnParser};
 
@@ -10,8 +10,8 @@ pub struct Parse {
 }
 
 impl Parse {
-    pub async fn execute<'a>(&self, _params: &ConfigParams) -> Result<(), Error> {
-        log::info!("Parse {:?}", self.url);
+    pub async fn execute<'a>(&self, _config: &Config) -> Result<(), Error> {
+        log::debug!("Parse {:?}", self.url);
         Ok(())
     }
 }

@@ -17,7 +17,9 @@ pub struct RanobesParser;
 #[async_trait]
 impl Downloader for RanobesParser {
     async fn get_book_info(&self, client: &mut Client, url: &str) -> Result<String, Error> {
-        let res = client.get(url).await?;
+        let res = client
+            .get(url, Some(r#"//*[@id="dle-content"]/article"#))
+            .await?;
         let document = Html::parse_document(&res);
         match document
             .select(&Selector::parse("div.r-fullstory-s1")?)
@@ -34,13 +36,13 @@ impl Downloader for RanobesParser {
 
             // Calculate the total TOC pages (25 chapters per page)
             let total_chapters = self.get_total_chapters(&document)?;
-            log::info!("Total chapters: {}", total_chapters);
+            log::debug!("Total chapters: {}", total_chapters);
             let total_toc_pages = total_chapters
                 .checked_add(24)
                 .ok_or(Error::html("bad chapter count"))?
                 .checked_div(25)
                 .ok_or(Error::html("bad chapter count"))?;
-            log::info!("Total TOC pages: {}", total_toc_pages);
+            log::debug!("Total TOC pages: {}", total_toc_pages);
 
             // Get TOC base URL
             let more_chapters = document
@@ -59,7 +61,7 @@ impl Downloader for RanobesParser {
         let mut chapterlist = UrlCache::new();
         let mut url = more_chapters.clone();
         for page in 0..total_toc_pages {
-            let res = client.get(&url).await?;
+            let res = client.get(&url, None).await?;
             let doc = Html::parse_document(&res);
             for script in doc.select(&Selector::parse("script")?) {
                 let text = script.text().collect::<Vec<_>>().join("");
@@ -92,7 +94,7 @@ impl Downloader for RanobesParser {
     }
 
     async fn get_chapter(&self, client: &mut Client, url: &str) -> Result<String, Error> {
-        let res = client.get(url).await?;
+        let res = client.get(url, Some(r#"//*[@id="arrticle"]"#)).await?;
         let document = Html::parse_document(&res);
         match document.select(&Selector::parse("div#arrticle")?).next() {
             Some(_) => Ok(res),

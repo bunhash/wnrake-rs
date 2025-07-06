@@ -1,156 +1,69 @@
 //! config parameters
 
-use clap::Args;
-use config::{Config, File, FileFormat};
+use config::{File, FileFormat};
 use serde::Deserialize;
+use std::collections::HashMap;
 use wnrake::{
     cache::Cache,
     client::Client,
     proxy::{Api, Proxy},
 };
 
-#[derive(Args, Clone, Debug, Deserialize)]
-#[group(required = false, multiple = true)]
-pub struct ConfigParams {
-    /// Solver URL [default: http://localhost:8191]
-    #[arg(long, value_name = "URL")]
-    solver: Option<String>,
+#[derive(Clone, Debug)]
+pub struct Config {
+    /// Configuration file
+    config_file: Option<String>,
 
-    /// Disable cache
-    #[arg(long)]
-    disable_cache: Option<bool>,
+    /// Solver URL [default: http://localhost:8191/v1]
+    solver: String,
 
     /// Cache [default: disabled]
-    #[arg(long, value_name = "DIR")]
     cache: Option<String>,
 
-    /// Proxy
-    #[arg(long, value_name = "URL")]
-    proxy: Option<String>,
-
-    /// Proxy username
-    #[arg(long, value_name = "USERNAME")]
-    proxy_username: Option<String>,
-
-    /// Proxy password
-    #[arg(long, value_name = "PASSWORD")]
-    proxy_password: Option<String>,
-
-    /// Proxy API
-    #[arg(long, value_name = "URL")]
-    proxy_api: Option<String>,
-
-    /// Proxy API username
-    #[arg(long, value_name = "USERNAME")]
-    proxy_api_username: Option<String>,
-
-    /// Proxy API password
-    #[arg(long, value_name = "PASSWORD")]
-    proxy_api_password: Option<String>,
-
-    /// Proxy API key
-    #[arg(long, value_name = "KEY")]
-    proxy_api_key: Option<String>,
+    /// Cache [default: disabled]
+    proxy: Option<ProxyConfig>,
 }
 
-impl ConfigParams {
-    /// Fills any None values with the configuration file defaults
-    pub fn load_config(&mut self, config: &str) {
-        log::info!("Using configuration {}", config);
-        match Config::builder()
-            .add_source(File::new(config, FileFormat::Toml))
-            .build()
-        {
-            Ok(settings) => match settings.try_deserialize::<ConfigParams>() {
-                Ok(default_params) => {
-                    if self.solver.is_none() {
-                        self.solver = default_params.solver;
-                    }
-                    if !self.disable_cache.unwrap_or(false) && self.cache.is_none() {
-                        self.cache = if default_params.disable_cache.unwrap_or(false) {
-                            None
-                        } else {
-                            default_params.cache
-                        };
-                    }
-                    if self.proxy.is_none() {
-                        self.proxy = default_params.proxy;
-                    }
-                    if self.proxy_username.is_none() {
-                        self.proxy_username = default_params.proxy_username;
-                    }
-                    if self.proxy_password.is_none() {
-                        self.proxy_password = default_params.proxy_password;
-                    }
-                    if self.proxy_api.is_none() {
-                        self.proxy_api = default_params.proxy_api;
-                    }
-                    if self.proxy_api_username.is_none() {
-                        self.proxy_api_username = default_params.proxy_api_username;
-                    }
-                    if self.proxy_api_password.is_none() {
-                        self.proxy_api_password = default_params.proxy_api_password;
-                    }
-                    if self.proxy_api_key.is_none() {
-                        self.proxy_api_key = default_params.proxy_api_key;
-                    }
-                }
-                Err(e) => log::warn!("{:?}", e),
-            },
-            Err(e) => log::warn!("{:?}", e),
-        }
-    }
-
-    fn configure_proxy(&self) -> Option<Proxy> {
-        match &self.proxy {
-            Some(url) => {
-                let api_impl = match self.proxy_api.as_deref() {
-                    Some(url) => {
-                        if let Some(key) = self.proxy_api_key.as_deref() {
-                            Some(Api::with_api_key(url, key))
-                        } else if let (Some(username), Some(password)) = (
-                            self.proxy_api_username.as_deref(),
-                            self.proxy_api_password.as_deref(),
-                        ) {
-                            Some(Api::with_basic_auth(url, username, password))
-                        } else {
-                            Some(Api::new(url))
-                        }
-                    }
-                    None => None,
-                };
-                let mut proxy = Proxy::builder(url);
-                if let Some(username) = self.proxy_username.as_deref() {
-                    proxy = proxy.username(username);
-                    if let Some(password) = self.proxy_password.as_deref() {
-                        proxy = proxy.password(password);
-                    }
-                }
-                if let Some(api) = api_impl {
-                    proxy = proxy.api(api);
-                }
-                Some(proxy.build())
-            }
-            None => None,
-        }
-    }
-
-    fn configure_cache(&self) -> Option<Cache> {
-        match &self.cache {
-            Some(dir) => match Cache::new(dir) {
-                Ok(cache) => Some(cache),
-                Err(e) => {
-                    log::warn!("{:?}", e);
+impl Config {
+    /// Merges CLI and file configurations. CLI takes precendence. Comsumes everything.
+    pub fn merge(
+        config_file: Option<String>,
+        solver: Option<String>,
+        disable_cache: bool,
+        cache: Option<String>,
+        proxy_name: Option<String>,
+        mut file: ConfigFile,
+    ) -> Config {
+        let solver = solver.unwrap_or(file.solver);
+        let cache = if disable_cache {
+            None
+        } else if cache.is_some() {
+            cache
+        } else {
+            file.cache
+        };
+        let proxy_name = proxy_name.or(file.proxy);
+        let proxy = match proxy_name {
+            Some(name) => match file.proxies.remove(&name) {
+                Some(proxy) => Some(proxy),
+                None => {
+                    log::warn!("`{}` proxy does not exist in configuration", name);
                     None
                 }
             },
             None => None,
+        };
+        Config {
+            config_file,
+            solver,
+            cache,
+            proxy,
         }
     }
 
+    /// Builds a `Client` given the configuration
     pub fn to_client(&self) -> Client {
-        let solver = self.solver.as_deref().unwrap_or("http://localhost:8191");
-        let mut client = Client::builder(solver);
+        let mut client = Client::builder(&self.solver);
         if let Some(proxy) = self.configure_proxy() {
             client = client.proxy(proxy);
         }
@@ -158,5 +71,136 @@ impl ConfigParams {
             client = client.cache(cache);
         }
         client.build()
+    }
+
+    fn configure_proxy(&self) -> Option<Proxy> {
+        Some(self.proxy.as_ref()?.to_proxy())
+    }
+
+    fn configure_cache(&self) -> Option<Cache> {
+        Some(Cache::new(self.cache.as_ref()?).ok()?)
+    }
+
+    pub fn load_config_file(&self) -> ConfigFile {
+        match &self.config_file {
+            Some(file) => ConfigFile::load(file),
+            None => ConfigFile::default(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct ConfigFile {
+    /// Solver URL [default: http://localhost:8191/v1]
+    #[serde(default = "solver_default")]
+    pub solver: String,
+
+    /// Cache [default: disabled]
+    pub cache: Option<String>,
+
+    /// Proxy name [default: disabled]
+    pub proxy: Option<String>,
+
+    /// Map of proxies
+    #[serde(default)]
+    pub proxies: HashMap<String, ProxyConfig>,
+}
+
+fn solver_default() -> String {
+    "http://localhost:8191/v1".into()
+}
+
+impl Default for ConfigFile {
+    fn default() -> Self {
+        ConfigFile {
+            solver: solver_default(),
+            cache: None,
+            proxy: None,
+            proxies: HashMap::new(),
+        }
+    }
+}
+
+impl ConfigFile {
+    /// Loads the configuration file (TOML)
+    ///
+    /// Example:
+    ///
+    /// solver = "http://localhost:8191/v1"
+    /// cache = "/path/to/cache_dir"
+    ///
+    /// [proxies]
+    /// proxy1 = { url = "http://localhost:9000" }
+    /// proxy2 = { url = "http://localhost:9000", api = "http://localhost:8000" }
+    pub fn load(file: &str) -> Self {
+        log::debug!("Using configuration {}", file);
+        match ::config::Config::builder()
+            .add_source(File::new(file, FileFormat::Toml))
+            .build()
+        {
+            Ok(config_file) => match config_file.try_deserialize::<ConfigFile>() {
+                Ok(config) => return config,
+                Err(e) => log::warn!("{:?}", e),
+            },
+            Err(e) => log::warn!("{:?}", e),
+        }
+        ConfigFile::default()
+    }
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct ProxyConfig {
+    /// Proxy URL
+    pub url: String,
+
+    /// Proxy username
+    pub username: Option<String>,
+
+    /// Proxy password
+    pub password: Option<String>,
+
+    /// Proxy API
+    pub api: Option<String>,
+
+    /// Proxy API username
+    pub api_username: Option<String>,
+
+    /// Proxy API password
+    pub api_password: Option<String>,
+
+    /// Proxy API key
+    pub api_key: Option<String>,
+}
+
+impl ProxyConfig {
+    pub fn to_proxy(&self) -> Proxy {
+        // Build API
+        let api = match self.api.as_deref() {
+            Some(url) => {
+                if let Some(key) = self.api_key.as_deref() {
+                    Some(Api::with_api_key(url, key))
+                } else if let (Some(username), Some(password)) =
+                    (self.api_username.as_deref(), self.api_password.as_deref())
+                {
+                    Some(Api::with_basic_auth(url, username, password))
+                } else {
+                    Some(Api::new(url))
+                }
+            }
+            None => None,
+        };
+
+        // Build Proxy
+        let mut proxy = Proxy::builder(&self.url);
+        if let Some(username) = self.username.as_deref() {
+            proxy = proxy.username(username);
+            if let Some(password) = self.password.as_deref() {
+                proxy = proxy.password(password);
+            }
+        }
+        if let Some(api) = api {
+            proxy = proxy.api(api);
+        }
+        proxy.build()
     }
 }

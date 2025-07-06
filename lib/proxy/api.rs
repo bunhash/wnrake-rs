@@ -65,10 +65,15 @@ impl Api {
         }
         let res = client.send().await?;
         let res = res.json::<Value>().await.map_err(Error::json)?;
-        Ok(res["public_ip"]
+        let ip = res["public_ip"]
             .as_str()
             .ok_or(Error::json("expected public_ip in response"))?
-            .into())
+            .trim();
+        if ip.is_empty() {
+            Err(Error::json("expected public_ip in response"))
+        } else {
+            Ok(ip.into())
+        }
     }
 
     /// Gets the status of the proxy
@@ -87,31 +92,55 @@ impl Api {
         })
     }
 
-    /// Wait for proxy to be good
-    pub async fn wait(&self, seconds: u64) -> Result<(), Error> {
-        match timeout(Duration::from_secs(seconds), self._infinite_wait()).await {
+    /// Restarts the proxy. Can timeout.
+    pub async fn restart(&self) -> Result<(), Error> {
+        let _ = self.put_state("stopped").await;
+        std::thread::sleep(Duration::from_millis(1000));
+        self.wait_for_status(ProxyStatus::Stopped, 30).await?;
+        std::thread::sleep(Duration::from_millis(1000));
+        self.wait_for_status(ProxyStatus::Running, 30).await?;
+        std::thread::sleep(Duration::from_millis(1000));
+        self.wait_for_ip(30).await?;
+        std::thread::sleep(Duration::from_millis(1000));
+        Ok(())
+    }
+
+    /// Waits for proxy to match the provided status.
+    pub async fn wait_for_status(&self, status: ProxyStatus, seconds: u64) -> Result<(), Error> {
+        match timeout(Duration::from_secs(seconds), async {
+            loop {
+                if let Ok(s) = self.status().await {
+                    if s == status {
+                        log::debug!("proxy is {}", s);
+                        return;
+                    }
+                }
+                std::thread::sleep(Duration::from_millis(1000));
+            }
+        })
+        .await
+        {
             Ok(_) => Ok(()),
             Err(_) => Err(Error::timeout("waiting for proxy timed out")),
         }
     }
 
-    /// Restarts the proxy. Can timeout.
-    pub async fn restart(&self) -> Result<(), Error> {
-        let _ = self.put_state("stopped").await;
-        std::thread::sleep(Duration::from_millis(1000));
-        let _ = self.put_state("running").await;
-        self.wait(60).await
-    }
-
-    /// Wait for proxy to become good. Infinite loop.
-    async fn _infinite_wait(&self) {
-        loop {
-            match self.status().await {
-                Ok(ProxyStatus::Running) => break,
-                _ => std::thread::sleep(Duration::from_millis(500)),
+    /// Wait for proxy to have an IP.
+    pub async fn wait_for_ip(&self, seconds: u64) -> Result<(), Error> {
+        match timeout(Duration::from_secs(seconds), async {
+            loop {
+                if let Ok(ip) = self.ip().await {
+                    log::debug!("public IP: {}", ip);
+                    return;
+                }
+                std::thread::sleep(Duration::from_millis(1000));
             }
+        })
+        .await
+        {
+            Ok(_) => Ok(()),
+            Err(_) => Err(Error::timeout("waiting for IP timed out")),
         }
-        std::thread::sleep(Duration::from_millis(500));
     }
 
     /// Send a command the modify the state

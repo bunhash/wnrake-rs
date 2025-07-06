@@ -1,6 +1,6 @@
 //! build command
 
-use crate::config::ConfigParams;
+use crate::config::Config;
 use clap::Args;
 use wnrake::{error::Error, parser::WnParser};
 
@@ -10,8 +10,8 @@ pub struct Build {
 }
 
 impl Build {
-    pub async fn execute<'a>(&self, _params: &ConfigParams) -> Result<(), Error> {
-        log::info!("Build {:?}", self.url);
+    pub async fn execute<'a>(&self, _config: &Config) -> Result<(), Error> {
+        log::debug!("Build {:?}", self.url);
         Ok(())
     }
 }

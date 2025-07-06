@@ -2,7 +2,6 @@
 
 use clap::{Parser, Subcommand};
 use log::LevelFilter;
-use simple_logger::SimpleLogger;
 use wnrake::error::{Error, ErrorType};
 
 mod build;
@@ -11,6 +10,7 @@ mod crawl;
 mod download;
 mod info;
 mod parse;
+mod utils;
 
 #[derive(Parser, Clone, Debug)]
 #[command(version, about, long_about = None)]
@@ -27,9 +27,21 @@ struct Cli {
     #[arg(short = 'f')]
     config: Option<String>,
 
-    /// Client parameters
-    #[command(flatten)]
-    config_params: config::ConfigParams,
+    /// Solver URL [default: http://localhost:8191/v1]
+    #[arg(long, value_name = "URL")]
+    solver: Option<String>,
+
+    /// Disable cache
+    #[arg(long)]
+    disable_cache: bool,
+
+    /// Cache [default: disabled]
+    #[arg(long, value_name = "DIR")]
+    cache: Option<String>,
+
+    /// Name of proxy (in configuration file)
+    #[arg(long, value_name = "NAME")]
+    proxy: Option<String>,
 
     /// Command
     #[command(subcommand)]
@@ -55,12 +67,18 @@ enum Command {
     Build(build::Build),
 }
 
-fn load_configuration(cli: &mut Cli) {
-    let config_file = if cli.config.is_some() {
-        Some(cli.config.clone().unwrap())
+fn load_configuration(
+    config: Option<String>,
+    solver: Option<String>,
+    disable_cache: bool,
+    cache: Option<String>,
+    proxy_name: Option<String>,
+) -> config::Config {
+    let config_file = if config.is_some() {
+        Some(config.unwrap())
     } else if cfg!(windows) {
-        match std::env::var("APP_DATA") {
-            Ok(app_data) => Some(format!("{}/wnrake.toml", app_data)),
+        match std::env::var("LOCALAPPDATA") {
+            Ok(home) => Some(format!("{}/wnrake.toml", home)),
             _ => None,
         }
     } else {
@@ -69,36 +87,57 @@ fn load_configuration(cli: &mut Cli) {
             _ => None,
         }
     };
-    if let Some(config_file) = config_file {
-        cli.config_params.load_config(config_file.as_ref());
-    }
+    log::debug!("config file: {:?}", config_file);
+    let config = match &config_file {
+        Some(f) => config::ConfigFile::load(f),
+        None => config::ConfigFile::default(),
+    };
+    config::Config::merge(
+        config_file,
+        solver,
+        disable_cache,
+        cache,
+        proxy_name,
+        config,
+    )
 }
 
 #[tokio::main]
 async fn dispatcher() -> Result<(), Error> {
-    let mut cli = Cli::parse();
+    let cli = Cli::parse();
 
-    // Initialize
-    SimpleLogger::new()
-        .with_colors(true)
-        .with_level(if cli.debug {
-            LevelFilter::Debug
-        } else if cli.verbose {
-            LevelFilter::Info
-        } else {
-            LevelFilter::Warn
-        })
-        .init()
-        .expect("failed to initialize logger");
-    load_configuration(&mut cli);
+    // Initialize logger
+    let mut builder = env_logger::Builder::new();
+    builder.format_timestamp(None);
+    if cli.debug {
+        builder.filter_level(LevelFilter::Debug);
+    } else if cli.verbose {
+        builder
+            .filter_level(LevelFilter::Info)
+            .filter(Some("wnrake"), LevelFilter::Debug);
+    } else {
+        builder.filter_level(LevelFilter::Info);
+    }
+    builder.init();
+
+    // Load configuration
+    let command = cli.command;
+    let config = load_configuration(
+        cli.config,
+        cli.solver,
+        cli.disable_cache,
+        cli.cache,
+        cli.proxy,
+    );
+    log::debug!("{:?}", config);
 
     // Dispatch
-    match &cli.command {
-        Command::Info(cmd) => cmd.execute(&cli.config_params).await,
-        Command::Download(cmd) => cmd.execute(&cli.config_params).await,
-        Command::Crawl(cmd) => cmd.execute(&cli.config_params).await,
-        Command::Parse(cmd) => cmd.execute(&cli.config_params).await,
-        Command::Build(cmd) => cmd.execute(&cli.config_params).await,
+    match &command {
+        Command::Info(cmd) => cmd.execute(&config).await,
+        Command::Download(cmd) => cmd.execute(&config).await,
+        Command::Crawl(cmd) => cmd.execute(&config).await,
+        Command::Parse(cmd) => cmd.execute(&config).await,
+        Command::Build(cmd) => cmd.execute(&config).await,
     }
 }
 
