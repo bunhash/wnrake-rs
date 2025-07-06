@@ -61,7 +61,17 @@ impl Config {
         }
     }
 
-    /// Builds a `Client` given the configuration
+    /// Builds a `Client` given the proxy
+    pub fn to_client_with_proxy(&self, proxy: &ProxyConfig) -> Client {
+        let mut client = Client::builder(&self.solver);
+        client = client.proxy(proxy.to_proxy());
+        if let Some(cache) = self.configure_cache() {
+            client = client.cache(cache);
+        }
+        client.build()
+    }
+
+    /// Builds a `Client`
     pub fn to_client(&self) -> Client {
         let mut client = Client::builder(&self.solver);
         if let Some(proxy) = self.configure_proxy() {
