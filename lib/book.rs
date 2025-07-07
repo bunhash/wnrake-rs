@@ -86,11 +86,7 @@ impl UrlCache {
             .lines()
             .filter_map(|line| {
                 let line = line.ok()?.trim().to_string();
-                if line.is_empty() {
-                    None
-                } else {
-                    Some(line)
-                }
+                if line.is_empty() { None } else { Some(line) }
             })
             .collect::<Vec<String>>();
         Ok(UrlCache(urls))
@@ -143,11 +139,7 @@ impl ChapterList {
         let file = io::BufReader::new(File::open(path)?);
         for line in file.lines().filter_map(|line| {
             let line = line.ok()?.trim().to_string();
-            if line.is_empty() {
-                None
-            } else {
-                Some(line)
-            }
+            if line.is_empty() { None } else { Some(line) }
         }) {
             let mut parts = line.split_ascii_whitespace();
             if parts.by_ref().count() != 2 {

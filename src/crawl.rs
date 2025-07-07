@@ -29,7 +29,7 @@ impl Crawl {
 
     async fn do_work(&self, client: &mut Client) -> Result<(), Error> {
         // Make staging directory
-        utils::ensure_staging()?;
+        utils::ensure_dir("staging")?;
 
         // Load URL cache
         log::debug!("loading urlcache.txt");
@@ -53,7 +53,7 @@ impl Crawl {
             let url = &url_cache[i];
 
             // Get path
-            let filename = utils::to_filename(i, url);
+            let filename = utils::url_to_filename(i, url);
             let path = Path::join(Path::new("staging"), &filename);
             match path.is_file() {
                 true => {
@@ -79,7 +79,7 @@ impl Crawl {
         let mut next_url = &url_cache[index];
         loop {
             // Get path
-            let filename = utils::to_filename(index, next_url);
+            let filename = utils::url_to_filename(index, next_url);
             let path = Path::join(Path::new("staging"), &filename);
 
             // Load parser

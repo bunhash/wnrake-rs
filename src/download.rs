@@ -35,53 +35,46 @@ impl Download {
                 0 => Err(Error::solver("must have at least 1 proxy configured")),
                 1 => {
                     log::warn!("only 1 proxy found, falling back to single thread");
-
                     let mut client = config.to_client_with_proxy(proxies.first().unwrap());
-
-                    log::debug!("Solver={}", client.solver());
-                    log::debug!("Proxy={:?}", client.proxy());
-                    log::debug!("Cache={:?}", client.cache());
-
-                    client.create_session().await?;
-                    let res = self.single_thread(&mut client).await;
-                    client.destroy_session().await?;
-                    res
+                    self.single_thread(&mut client).await
                 }
                 _ => self.multi_thread(config, proxies).await,
             }
         } else {
             let mut client = config.to_client();
-
-            log::debug!("Solver={}", client.solver());
-            log::debug!("Proxy={:?}", client.proxy());
-            log::debug!("Cache={:?}", client.cache());
-
-            client.create_session().await?;
-            let res = self.single_thread(&mut client).await;
-            client.destroy_session().await?;
-            res
+            self.single_thread(&mut client).await
         }
     }
 
     async fn single_thread(&self, client: &mut Client) -> Result<(), Error> {
-        // Make staging directory
-        utils::ensure_staging()?;
+        log::debug!("Solver={}", client.solver());
+        log::debug!("Proxy={:?}", client.proxy());
+        log::debug!("Cache={:?}", client.cache());
 
-        // Load URL cache
-        log::debug!("loading urlcache.txt");
-        let url_cache = UrlCache::from_file("urlcache.txt")?;
-        let total_chapters = url_cache.as_ref().len();
-        log::debug!("total chapters: {}", total_chapters);
+        client.create_session().await?;
+        let res = async || -> Result<(), Error> {
+            // Make staging directory
+            utils::ensure_dir("staging")?;
 
-        for (i, url) in url_cache.as_ref().iter().enumerate() {
-            download_chapter(client, i, total_chapters, url).await?;
-        }
-        Ok(())
+            // Load URL cache
+            log::debug!("loading urlcache.txt");
+            let url_cache = UrlCache::from_file("urlcache.txt")?;
+            let total_chapters = url_cache.as_ref().len();
+            log::debug!("total chapters: {}", total_chapters);
+
+            for (i, url) in url_cache.as_ref().iter().enumerate() {
+                download_chapter(client, i, total_chapters, url).await?;
+            }
+            Ok(())
+        }()
+        .await;
+        client.destroy_session().await?;
+        res
     }
 
     async fn multi_thread(&self, config: &Config, proxies: Vec<ProxyConfig>) -> Result<(), Error> {
         // Make staging directory
-        utils::ensure_staging()?;
+        utils::ensure_dir("staging")?;
 
         // Load URL cache
         log::debug!("loading urlcache.txt");
@@ -93,7 +86,7 @@ impl Download {
         let url_cache = Arc::new(Mutex::new(
             url_cache.0.into_iter().enumerate().collect::<VecDeque<_>>(),
         ));
-        let mut workers = proxies
+        let workers = proxies
             .iter()
             .map(|proxy| {
                 log::debug!("{:?}", proxy);
@@ -107,14 +100,14 @@ impl Download {
 
         // Do work
         let futures = workers
-            .iter_mut()
-            .map(|worker| worker.do_work())
+            .into_iter()
+            .map(|worker| tokio::spawn(worker.do_work()))
             .collect::<Vec<_>>();
 
-        // Wait for futures
+        // Wait for work to complete
         for (i, future) in futures.into_iter().enumerate() {
             match future.await {
-                Ok(_) => log::debug!("worker {} successful", i),
+                Ok(_) => log::debug!("worker {} finished", i),
                 Err(e) => log::warn!("worker {}: {}", i, e),
             }
         }
@@ -135,7 +128,7 @@ async fn download_chapter(
     url: &str,
 ) -> Result<(), Error> {
     // Get path
-    let filename = utils::to_filename(i, url);
+    let filename = utils::url_to_filename(i, url);
     let path = Path::join(Path::new("staging"), &filename);
 
     match path.is_file() {
@@ -167,23 +160,34 @@ struct Worker {
 }
 
 impl Worker {
-    pub async fn do_work(&mut self) -> Result<(), Error> {
+    pub async fn do_work(mut self) {
         log::debug!("Solver={}", self.client.solver());
         log::debug!("Proxy={:?}", self.client.proxy());
         log::debug!("Cache={:?}", self.client.cache());
-
-        loop {
-            let task = {
-                let mut urls = self.urls.as_ref().lock().await;
-                urls.pop_front()
-            };
-            match task {
-                Some((i, url)) => {
-                    download_chapter(&mut self.client, i, self.total_chapters, &url).await?
+        match self.client.create_session().await {
+            Ok(_) => loop {
+                let task = {
+                    let mut urls = self.urls.as_ref().lock().await;
+                    urls.pop_front()
+                };
+                match task {
+                    Some((i, url)) => {
+                        match download_chapter(&mut self.client, i, self.total_chapters, &url).await
+                        {
+                            Ok(_) => {}
+                            Err(e) => {
+                                log::warn!("worker: {}", e);
+                                let mut urls = self.urls.as_ref().lock().await;
+                                urls.push_front((i, url));
+                                break;
+                            }
+                        }
+                    }
+                    None => break,
                 }
-                None => break,
-            }
+            },
+            Err(e) => log::error!("worker: {}", e),
         }
-        Ok(())
+        let _ = self.client.destroy_session().await;
     }
 }

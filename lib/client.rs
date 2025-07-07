@@ -172,17 +172,17 @@ impl Client {
             match self.get_single(url, xpath).await {
                 Ok(res) => return Ok(res),
                 Err(e) => {
-                    // If try again
-                    if e.error_type != ErrorType::Solution || cur_attempt >= max_attempts {
-                        return Err(e);
-                    }
-
                     log::warn!(
                         "Attempt ({}/{}): failed to download {}",
                         cur_attempt,
                         max_attempts,
                         url
                     );
+
+                    // If try again
+                    if e.error_type != ErrorType::Solution || cur_attempt >= max_attempts {
+                        return Err(e);
+                    }
 
                     // Reset session and proxy
                     log::debug!("Solution error. Resetting session");
