@@ -1,8 +1,7 @@
 //! build command
 
-use crate::config::Config;
 use clap::Args;
-use wnrake::{error::Error, parser::WnParser};
+use wnrake::{config::Config, error::Error, parser::WnParser};
 
 #[derive(Args, Clone, Debug)]
 pub struct Build {

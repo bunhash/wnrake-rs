@@ -2,10 +2,12 @@
 
 use clap::{Parser, Subcommand};
 use log::LevelFilter;
-use wnrake::error::{Error, ErrorType};
+use wnrake::{
+    config::{Config, ConfigBuilder},
+    error::{Error, ErrorType},
+};
 
 mod build;
-mod config;
 mod crawl;
 mod download;
 mod info;
@@ -73,7 +75,7 @@ fn load_configuration(
     disable_cache: bool,
     cache: Option<String>,
     proxy_name: Option<String>,
-) -> config::Config {
+) -> Result<Config, Error> {
     let config_file = if config.is_some() {
         Some(config.unwrap())
     } else if cfg!(windows) {
@@ -88,18 +90,16 @@ fn load_configuration(
         }
     };
     log::debug!("config file: {:?}", config_file);
-    let config = match &config_file {
-        Some(f) => config::ConfigFile::load(f),
-        None => config::ConfigFile::default(),
+    let builder = match &config_file {
+        Some(f) => ConfigBuilder::new(&f)?,
+        None => ConfigBuilder::default(),
     };
-    config::Config::merge(
-        config_file,
-        solver,
-        disable_cache,
-        cache,
-        proxy_name,
-        config,
-    )
+    Ok(builder
+        .solver(solver)
+        .cache(cache)
+        .proxy(proxy_name)
+        .disable_cache(disable_cache)
+        .build())
 }
 
 #[tokio::main]
@@ -128,7 +128,7 @@ async fn dispatcher() -> Result<(), Error> {
         cli.disable_cache,
         cli.cache,
         cli.proxy,
-    );
+    )?;
     log::debug!("{:?}", config);
 
     // Dispatch
@@ -146,14 +146,15 @@ fn main() {
         Err(e) => {
             log::error!("{}", e);
             match e.error_type {
-                ErrorType::Html => 1,
-                ErrorType::Io => 2,
-                ErrorType::Json => 3,
-                ErrorType::Parser => 4,
-                ErrorType::Solution => 5,
-                ErrorType::Solver => 6,
-                ErrorType::Status => 7,
-                ErrorType::Timeout => 8,
+                ErrorType::Config => 1,
+                ErrorType::Html => 2,
+                ErrorType::Io => 3,
+                ErrorType::Json => 4,
+                ErrorType::Parser => 5,
+                ErrorType::Proxy => 6,
+                ErrorType::Solution => 7,
+                ErrorType::Solver => 8,
+                ErrorType::Status => 9,
             }
         }
         Ok(_) => 0,

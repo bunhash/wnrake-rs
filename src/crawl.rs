@@ -1,11 +1,12 @@
 //! crawl command
 
-use crate::{config::Config, utils};
+use crate::utils;
 use clap::Args;
 use std::{fs::File, io::Write, path::Path};
 use wnrake::{
     book::UrlCache,
     client::Client,
+    config::Config,
     error::Error,
     parser::{Downloader, Parser, WnParser},
 };
@@ -15,7 +16,7 @@ pub struct Crawl;
 
 impl Crawl {
     pub async fn execute<'a>(&self, config: &Config) -> Result<(), Error> {
-        let mut client = config.to_client();
+        let mut client = config.to_client()?;
 
         log::debug!("Solver={}", client.solver());
         log::debug!("Proxy={:?}", client.proxy());
@@ -87,8 +88,8 @@ impl Crawl {
             log::debug!("using parser {:?}", parser);
 
             // Download
-            log::info!("({:>4}/????) Downloading {}", index + 1, next_url);
-            let chapter = parser.get_chapter(client, &next_url).await?;
+            log::info!("({:>4}/   ?) Downloading {}", index + 1, next_url);
+            let chapter = parser.get_chapter(client, next_url).await?;
 
             // Write file
             let mut file = File::create(path)?;

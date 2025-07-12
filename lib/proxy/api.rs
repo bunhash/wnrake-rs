@@ -93,14 +93,14 @@ impl Api {
     }
 
     /// Restarts the proxy. Can timeout.
-    pub async fn restart(&self) -> Result<(), Error> {
+    pub async fn restart(&self, seconds: u64) -> Result<(), Error> {
         let _ = self.put_state("stopped").await;
         std::thread::sleep(Duration::from_millis(1000));
-        self.wait_for_status(ProxyStatus::Stopped, 30).await?;
+        self.wait_for_status(ProxyStatus::Stopped, seconds).await?;
         std::thread::sleep(Duration::from_millis(1000));
-        self.wait_for_status(ProxyStatus::Running, 30).await?;
+        self.wait_for_status(ProxyStatus::Running, seconds).await?;
         std::thread::sleep(Duration::from_millis(1000));
-        self.wait_for_ip(30).await?;
+        self.wait_for_ip(seconds).await?;
         std::thread::sleep(Duration::from_millis(1000));
         Ok(())
     }
@@ -121,7 +121,7 @@ impl Api {
         .await
         {
             Ok(_) => Ok(()),
-            Err(_) => Err(Error::timeout("waiting for proxy timed out")),
+            Err(_) => Err(Error::proxy("waiting for proxy timed out")),
         }
     }
 
@@ -139,7 +139,7 @@ impl Api {
         .await
         {
             Ok(_) => Ok(()),
-            Err(_) => Err(Error::timeout("waiting for IP timed out")),
+            Err(_) => Err(Error::proxy("waiting for IP timed out")),
         }
     }
 

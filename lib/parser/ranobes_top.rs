@@ -2,7 +2,7 @@
 
 use crate::{
     book::{BookInfo, Chapter, UrlCache},
-    client::Client,
+    client::{Client, WaitFor},
     error::Error,
     parser::{Downloader, Parser},
 };
@@ -17,16 +17,14 @@ pub struct RanobesParser;
 #[async_trait]
 impl Downloader for RanobesParser {
     async fn get_book_info(&self, client: &mut Client, url: &str) -> Result<String, Error> {
-        let res = client
-            .get(url, Some(r#"//*[@id="dle-content"]/article"#))
-            .await?;
+        let res = client.get(url, Some(&WaitFor::id("dle-content"))).await?;
         let document = Html::parse_document(&res);
         match document
             .select(&Selector::parse("div.r-fullstory-s1")?)
             .next()
         {
             Some(_) => Ok(res),
-            None => Err(Error::html("invalid book info page")),
+            None => Err(Error::html("invalid book info page", false)),
         }
     }
 
@@ -39,18 +37,18 @@ impl Downloader for RanobesParser {
             log::debug!("Total chapters: {}", total_chapters);
             let total_toc_pages = total_chapters
                 .checked_add(24)
-                .ok_or(Error::html("bad chapter count"))?
+                .ok_or(Error::html("bad chapter count", true))?
                 .checked_div(25)
-                .ok_or(Error::html("bad chapter count"))?;
+                .ok_or(Error::html("bad chapter count", true))?;
             log::debug!("Total TOC pages: {}", total_toc_pages);
 
             // Get TOC base URL
             let more_chapters = document
                 .select(&Selector::parse("div.r-fullstory-chapters-foot a")?)
                 .nth(1)
-                .ok_or(Error::html("no footer links found"))?
+                .ok_or(Error::html("no footer links found", true))?
                 .attr("href")
-                .ok_or(Error::html("no href in link"))?;
+                .ok_or(Error::html("no href in link", true))?;
             (
                 total_toc_pages,
                 format!("https://ranobes.top{}", more_chapters),
@@ -94,11 +92,13 @@ impl Downloader for RanobesParser {
     }
 
     async fn get_chapter(&self, client: &mut Client, url: &str) -> Result<String, Error> {
-        let res = client.get(url, Some(r#"//*[@id="arrticle"]"#)).await?;
+        let res = client
+            .get_or_kill(url, Some(&WaitFor::id("arrticle")))
+            .await?;
         let document = Html::parse_document(&res);
         match document.select(&Selector::parse("div#arrticle")?).next() {
             Some(_) => Ok(res),
-            None => Err(Error::html("invalid chapter page")),
+            None => Err(Error::html("invalid chapter page", false)),
         }
     }
 }
@@ -111,15 +111,15 @@ impl Parser for RanobesParser {
         let title_h1 = document
             .select(&Selector::parse("div.r-fullstory-s1 h1.title")?)
             .next()
-            .ok_or(Error::html("expected title.h1"))?;
+            .ok_or(Error::html("expected title.h1", true))?;
         let span_selector = Selector::parse("span")?;
         let mut spans = title_h1.select(&span_selector);
         let span_0 = spans
             .next()
-            .ok_or(Error::html("expected fullstory span[0]"))?;
+            .ok_or(Error::html("expected fullstory span[0]", true))?;
         let span_1 = spans
             .next()
-            .ok_or(Error::html("expected fullstory span[1]"))?
+            .ok_or(Error::html("expected fullstory span[1]", true))?
             .text()
             .collect::<Vec<_>>()
             .join("");
@@ -136,7 +136,7 @@ impl Parser for RanobesParser {
                 .filter_map(|c| c.value().as_text())
                 // Grab first
                 .next()
-                .ok_or(Error::html("expected text"))?
+                .ok_or(Error::html("expected text", true))?
                 // Convert to string and trim
                 .to_string()
                 .trim()
@@ -209,7 +209,7 @@ impl Parser for RanobesParser {
         let chapter = document
             .select(&Selector::parse("div#arrticle")?)
             .next()
-            .ok_or(Error::html("arrticle not in html"))?;
+            .ok_or(Error::html("arrticle not in html", true))?;
 
         // Build HTML
         let html = format!(
@@ -227,7 +227,7 @@ impl Parser for RanobesParser {
         match document.select(&Selector::parse("a#next")?).next() {
             Some(el) => Ok(Some(
                 el.attr("href")
-                    .ok_or(Error::html("no href in link"))?
+                    .ok_or(Error::html("no href in link", false))?
                     .into(),
             )),
             None => Ok(None),
@@ -241,7 +241,7 @@ impl RanobesParser {
         let novel_spec_ul = html
             .select(&Selector::parse("div.r-fullstory-spec ul")?)
             .next()
-            .ok_or(Error::html("no r-fullstory-spec uls"))?;
+            .ok_or(Error::html("no r-fullstory-spec uls", true))?;
 
         // Cycle through lis to find the span
         let mut num_chapters_span = None;
@@ -252,7 +252,7 @@ impl RanobesParser {
                 num_chapters_span = Some(
                     li.select(&selector)
                         .next()
-                        .ok_or(Error::html("no span in novel_spec_items"))?,
+                        .ok_or(Error::html("no span in novel_spec_items", true))?,
                 );
             }
         }
@@ -264,6 +264,6 @@ impl RanobesParser {
             .collect::<Vec<_>>()
             .join("");
         let num_chapters = num_chapters.trim_end_matches("chapters").trim();
-        u32::from_str_radix(num_chapters, 10).map_err(Error::html)
+        u32::from_str_radix(num_chapters, 10).map_err(|e| Error::html(e, true))
     }
 }

@@ -4,6 +4,9 @@ use std::fmt;
 
 #[derive(Debug, Clone, Copy, PartialOrd, PartialEq, Ord, Eq)]
 pub enum ErrorType {
+    /// Configuration file errors
+    Config,
+
     /// HTML parsing errors
     Html,
 
@@ -16,7 +19,10 @@ pub enum ErrorType {
     /// Parser errors
     Parser,
 
-    /// Errors with the solution (i.e. status != ok)
+    /// Proxy errors
+    Proxy,
+
+    /// Errors solving the solution
     Solution,
 
     /// Network errors between the client and flaresolverr
@@ -24,22 +30,20 @@ pub enum ErrorType {
 
     /// When the solution contains a non-200 status
     Status,
-
-    /// General timeouts (not flaresolver timeouts)
-    Timeout,
 }
 
 impl fmt::Display for ErrorType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            ErrorType::Config => f.write_str("config"),
             ErrorType::Html => f.write_str("html"),
             ErrorType::Io => f.write_str("io"),
             ErrorType::Json => f.write_str("json"),
             ErrorType::Parser => f.write_str("parser"),
+            ErrorType::Proxy => f.write_str("proxy"),
             ErrorType::Solution => f.write_str("solution"),
             ErrorType::Solver => f.write_str("solver"),
             ErrorType::Status => f.write_str("status"),
-            ErrorType::Timeout => f.write_str("timeout"),
         }
     }
 }
@@ -47,6 +51,7 @@ impl fmt::Display for ErrorType {
 #[derive(Debug)]
 pub struct Error {
     pub error_type: ErrorType,
+    pub fatal: bool,
     pub message: String,
 }
 
@@ -74,14 +79,46 @@ impl From<reqwest::Error> for Error {
 
 impl<'a> From<scraper::error::SelectorErrorKind<'a>> for Error {
     fn from(error: scraper::error::SelectorErrorKind<'a>) -> Self {
-        Error::html(error)
+        Error::html(error, true)
     }
 }
 
 impl Error {
-    pub fn html(msg: impl fmt::Display) -> Error {
+    pub fn parse_solution_error(msg: impl fmt::Display) -> Error {
+        let message = format!("{}", msg);
+        if message.contains("ERR_TUNNEL_CONNECTION_FAILED") {
+            Error {
+                error_type: ErrorType::Proxy,
+                fatal: true,
+                message,
+            }
+        } else if message.contains("Error solving the challenge") {
+            Error {
+                error_type: ErrorType::Solution,
+                fatal: false,
+                message,
+            }
+        } else {
+            Error {
+                error_type: ErrorType::Solver,
+                fatal: true,
+                message: format!("{}", msg),
+            }
+        }
+    }
+
+    pub fn config(msg: impl fmt::Display) -> Error {
+        Error {
+            error_type: ErrorType::Config,
+            fatal: true,
+            message: format!("{}", msg),
+        }
+    }
+
+    pub fn html(msg: impl fmt::Display, fatal: bool) -> Error {
         Error {
             error_type: ErrorType::Html,
+            fatal,
             message: format!("{}", msg),
         }
     }
@@ -89,6 +126,7 @@ impl Error {
     pub fn io(msg: impl fmt::Display) -> Error {
         Error {
             error_type: ErrorType::Io,
+            fatal: true,
             message: format!("{}", msg),
         }
     }
@@ -96,6 +134,7 @@ impl Error {
     pub fn json(msg: impl fmt::Display) -> Error {
         Error {
             error_type: ErrorType::Json,
+            fatal: true,
             message: format!("{}", msg),
         }
     }
@@ -103,6 +142,15 @@ impl Error {
     pub fn parser(msg: impl fmt::Display) -> Error {
         Error {
             error_type: ErrorType::Parser,
+            fatal: true,
+            message: format!("{}", msg),
+        }
+    }
+
+    pub fn proxy(msg: impl fmt::Display) -> Error {
+        Error {
+            error_type: ErrorType::Proxy,
+            fatal: false,
             message: format!("{}", msg),
         }
     }
@@ -110,6 +158,7 @@ impl Error {
     pub fn solution(msg: impl fmt::Display) -> Error {
         Error {
             error_type: ErrorType::Solution,
+            fatal: false,
             message: format!("{}", msg),
         }
     }
@@ -117,6 +166,7 @@ impl Error {
     pub fn solver(msg: impl fmt::Display) -> Error {
         Error {
             error_type: ErrorType::Solver,
+            fatal: true,
             message: format!("{}", msg),
         }
     }
@@ -124,14 +174,8 @@ impl Error {
     pub fn status(status: u16) -> Error {
         Error {
             error_type: ErrorType::Status,
+            fatal: true,
             message: format!("returned status {}", status),
-        }
-    }
-
-    pub fn timeout(msg: impl fmt::Display) -> Error {
-        Error {
-            error_type: ErrorType::Timeout,
-            message: format!("{}", msg),
         }
     }
 }

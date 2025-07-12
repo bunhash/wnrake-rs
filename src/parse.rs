@@ -1,9 +1,9 @@
 //! parse command
 
-use crate::{config::Config, utils};
+use crate::utils;
 use clap::Args;
 use std::{
-    fs::{read_to_string, File},
+    fs::{File, read_to_string},
     io::Write,
     path::Path,
     sync::Arc,
@@ -11,6 +11,7 @@ use std::{
 use tokio::sync::Mutex;
 use wnrake::{
     book::{ChapterInfo, ChapterList, UrlCache},
+    config::Config,
     error::Error,
     parser::{Parser, WnParser},
 };
@@ -101,6 +102,12 @@ impl Worker {
                 let parsed_path = Path::join(Path::new("book"), &parsed_filename);
 
                 // Parse chapter
+                log::info!(
+                    "({:>4}/{:>4}) parsing {}",
+                    self.index + 1,
+                    self.total_chapters,
+                    self.url
+                );
                 let html = read_to_string(raw_path)?;
                 let chapter = parser.parse_chapter(&html)?;
 

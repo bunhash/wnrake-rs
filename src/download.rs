@@ -1,15 +1,13 @@
 //! download command
 
-use crate::{
-    config::{Config, ProxyConfig},
-    utils,
-};
+use crate::utils;
 use clap::Args;
 use std::{collections::VecDeque, fs::File, io::Write, path::Path, sync::Arc};
 use tokio::sync::Mutex;
 use wnrake::{
     book::UrlCache,
     client::Client,
+    config::Config,
     error::Error,
     parser::{Downloader, WnParser},
 };
@@ -24,24 +22,19 @@ pub struct Download {
 impl Download {
     pub async fn execute<'a>(&self, config: &Config) -> Result<(), Error> {
         if self.use_threads {
-            let proxies = config
-                .load_config_file()
-                .proxies
-                .into_iter()
-                .map(|(_, v)| v)
-                .collect::<Vec<ProxyConfig>>();
+            let proxies = config.proxies().map(|k| k.as_str()).collect::<Vec<_>>();
             let proxy_len = proxies.len();
             match proxy_len {
                 0 => Err(Error::solver("must have at least 1 proxy configured")),
                 1 => {
                     log::warn!("only 1 proxy found, falling back to single thread");
-                    let mut client = config.to_client_with_proxy(proxies.first().unwrap());
+                    let mut client = config.to_client_with_proxy(proxies.first().unwrap())?;
                     self.single_thread(&mut client).await
                 }
                 _ => self.multi_thread(config, proxies).await,
             }
         } else {
-            let mut client = config.to_client();
+            let mut client = config.to_client()?;
             self.single_thread(&mut client).await
         }
     }
@@ -72,7 +65,7 @@ impl Download {
         res
     }
 
-    async fn multi_thread(&self, config: &Config, proxies: Vec<ProxyConfig>) -> Result<(), Error> {
+    async fn multi_thread(&self, config: &Config, proxies: Vec<&str>) -> Result<(), Error> {
         // Make staging directory
         utils::ensure_dir("staging")?;
 
@@ -82,21 +75,21 @@ impl Download {
         let total_chapters = url_cache.as_ref().len();
         log::debug!("total chapters: {}", total_chapters);
 
-        // Build workers
+        // Wrap work queue
         let url_cache = Arc::new(Mutex::new(
             url_cache.0.into_iter().enumerate().collect::<VecDeque<_>>(),
         ));
-        let workers = proxies
-            .iter()
-            .map(|proxy| {
-                log::debug!("{:?}", proxy);
-                Worker {
-                    client: config.to_client_with_proxy(proxy),
-                    total_chapters: total_chapters,
-                    urls: url_cache.clone(),
-                }
+
+        // Build workers
+        let mut workers = Vec::new();
+        for proxy in proxies {
+            log::debug!("{:?}", proxy);
+            workers.push(Worker {
+                client: config.to_client_with_proxy(proxy)?,
+                total_chapters: total_chapters,
+                urls: url_cache.clone(),
             })
-            .collect::<Vec<_>>();
+        }
 
         // Do work
         let futures = workers
@@ -164,30 +157,36 @@ impl Worker {
         log::debug!("Solver={}", self.client.solver());
         log::debug!("Proxy={:?}", self.client.proxy());
         log::debug!("Cache={:?}", self.client.cache());
-        match self.client.create_session().await {
-            Ok(_) => loop {
-                let task = {
-                    let mut urls = self.urls.as_ref().lock().await;
-                    urls.pop_front()
-                };
-                match task {
-                    Some((i, url)) => {
-                        match download_chapter(&mut self.client, i, self.total_chapters, &url).await
-                        {
-                            Ok(_) => {}
-                            Err(e) => {
-                                log::warn!("worker: {}", e);
-                                let mut urls = self.urls.as_ref().lock().await;
-                                urls.push_front((i, url));
-                                break;
-                            }
+
+        // Create session
+        if let Err(e) = self.client.create_session().await {
+            log::error!("worker: {}", e);
+            return;
+        }
+
+        // Work loop
+        loop {
+            let task = {
+                let mut urls = self.urls.as_ref().lock().await;
+                urls.pop_front()
+            };
+            match task {
+                Some((i, url)) => {
+                    match download_chapter(&mut self.client, i, self.total_chapters, &url).await {
+                        Ok(_) => {}
+                        Err(e) => {
+                            log::warn!("worker: {}", e);
+                            let mut urls = self.urls.as_ref().lock().await;
+                            urls.push_front((i, url));
+                            break;
                         }
                     }
-                    None => break,
                 }
-            },
-            Err(e) => log::error!("worker: {}", e),
+                None => break,
+            }
         }
+
+        // Destroy session
         let _ = self.client.destroy_session().await;
     }
 }

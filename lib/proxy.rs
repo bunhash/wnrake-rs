@@ -110,9 +110,9 @@ impl Proxy {
     }
 
     /// Restarts the proxy. Can timeout.
-    pub async fn restart(&self) -> Result<(), Error> {
+    pub async fn restart(&self, seconds: u64) -> Result<(), Error> {
         match &self.api {
-            Some(api) => api.restart().await,
+            Some(api) => api.restart(seconds).await,
             None => Ok(()),
         }
     }

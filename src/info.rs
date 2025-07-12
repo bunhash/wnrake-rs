@@ -1,10 +1,10 @@
 //! info command
 
-use crate::config::Config;
 use clap::Args;
 use wnrake::{
     book::BookInfo,
     client::Client,
+    config::Config,
     error::Error,
     parser::{Downloader, Parser, WnParser},
 };
@@ -16,7 +16,7 @@ pub struct Info {
 
 impl Info {
     pub async fn execute<'a>(&self, config: &Config) -> Result<(), Error> {
-        let mut client = config.to_client();
+        let mut client = config.to_client()?;
 
         log::debug!("Solver={}", client.solver());
         log::debug!("Proxy={:?}", client.proxy());
