@@ -111,9 +111,11 @@ impl Client {
         Ok(())
     }
 
+    /// Processes the flaresolverr request
     pub async fn request(&mut self, mut request: Request) -> Result<String, Error> {
         request.max_timeout = self.timeout.as_millis();
         request.session = self.session.clone();
+        let attempts = request.attempts;
         if request.enable_cache && self.cache.is_some() {
             let res = self
                 .cache
@@ -127,7 +129,6 @@ impl Client {
                 }
                 None => {
                     log::debug!("{} not found in cache", request.url);
-                    let attempts = request.attempts;
                     let res = self.n_requests(&mut request, attempts).await?;
                     self.cache
                         .as_ref()
@@ -137,10 +138,31 @@ impl Client {
                 }
             }
         } else {
-            Ok(self.n_requests(&mut request, 5).await?)
+            Ok(self.n_requests(&mut request, attempts).await?)
         }
     }
 
+    /// Convenience function for the typical HTTP GET
+    pub async fn get(&mut self, url: &str) -> Result<String, Error> {
+        self.request(Request::get(url).build()).await
+    }
+
+    /// Convenience function for the typical HTTP POST
+    pub async fn post(&mut self, url: &str, post_data: &[(&str, &str)]) -> Result<String, Error> {
+        self.request(Request::post(url).post_data(post_data).build())
+            .await
+    }
+
+    /// Attempt to recover by resetting the session (and reconnecting the VPN)
+    pub async fn recover(&mut self, seconds: u64) -> Result<(), Error> {
+        self.destroy_session().await?;
+        if let Some(proxy) = &self.proxy {
+            proxy.restart(seconds).await?;
+        }
+        self.create_session().await
+    }
+
+    /// Attempts the request and will recover from non-fatal errors up to N times
     async fn n_requests(
         &mut self,
         request: &Request,
@@ -188,6 +210,7 @@ impl Client {
         }
     }
 
+    /// Gets the response, expects a good solution and a HTTP 200 response
     async fn _request(&self, request: &Request) -> Result<String, Error> {
         // Send HTTP Post
         let res = self.client.post(&self.solver).json(request).send().await?;
@@ -212,23 +235,6 @@ impl Client {
             log::debug!("solution error {:?}", &res);
             Err(Error::parse_solution_error(&res.message))
         }
-    }
-
-    pub async fn get(&mut self, url: &str) -> Result<String, Error> {
-        self.request(Request::get(url).build()).await
-    }
-
-    pub async fn post(&mut self, url: &str, post_data: &[(&str, &str)]) -> Result<String, Error> {
-        self.request(Request::post(url).post_data(post_data).build())
-            .await
-    }
-
-    pub async fn recover(&mut self, seconds: u64) -> Result<(), Error> {
-        self.destroy_session().await?;
-        if let Some(proxy) = &self.proxy {
-            proxy.restart(seconds).await?;
-        }
-        self.create_session().await
     }
 }
 
