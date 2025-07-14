@@ -5,7 +5,7 @@
 //! [https://github.com/qdm12/gluetun](https://github.com/qdm12/gluetun)
 
 use crate::error::Error;
-use serde_json::{Map, Value};
+use serde::Serialize;
 use std::fmt;
 
 mod api;
@@ -31,11 +31,14 @@ impl fmt::Display for ProxyStatus {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub struct Proxy {
     pub(crate) url: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) username: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) password: Option<String>,
+    #[serde(skip_serializing)]
     pub(crate) api: Option<Api>,
 }
 
@@ -115,19 +118,6 @@ impl Proxy {
             Some(api) => api.restart(seconds).await,
             None => Ok(()),
         }
-    }
-
-    /// Returns the proxy as a JSON serializable object
-    pub(crate) fn to_json(&self) -> Value {
-        let mut map = Map::new();
-        map.insert("url".into(), Value::String(self.url.clone()));
-        if let Some(username) = self.username() {
-            map.insert("username".into(), Value::String(username.into()));
-            if let Some(password) = self.username() {
-                map.insert("password".into(), Value::String(password.into()));
-            }
-        }
-        Value::Object(map)
     }
 }
 

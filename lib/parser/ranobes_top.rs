@@ -2,9 +2,10 @@
 
 use crate::{
     book::{BookInfo, Chapter, UrlCache},
-    client::{Client, WaitFor},
+    client::Client,
     error::Error,
     parser::{Downloader, Parser},
+    request::{Request, WaitFor},
 };
 use async_trait::async_trait;
 use html5ever::tree_builder::TreeSink;
@@ -17,7 +18,13 @@ pub struct RanobesParser;
 #[async_trait]
 impl Downloader for RanobesParser {
     async fn get_book_info(&self, client: &mut Client, url: &str) -> Result<String, Error> {
-        let res = client.get(url, Some(&WaitFor::id("dle-content"))).await?;
+        let res = client
+            .request(
+                Request::get(url)
+                    .wait_for(WaitFor::id("dle-content"))
+                    .build(),
+            )
+            .await?;
         let document = Html::parse_document(&res);
         match document
             .select(&Selector::parse("div.r-fullstory-s1")?)
@@ -28,7 +35,12 @@ impl Downloader for RanobesParser {
         }
     }
 
-    async fn get_chapterlist(&self, client: &mut Client, html: &str) -> Result<UrlCache, Error> {
+    async fn get_chapterlist(
+        &self,
+        client: &mut Client,
+        _url: &str,
+        html: &str,
+    ) -> Result<UrlCache, Error> {
         let (total_toc_pages, more_chapters) = {
             let document = Html::parse_document(&html);
 
@@ -59,7 +71,7 @@ impl Downloader for RanobesParser {
         let mut chapterlist = UrlCache::new();
         let mut url = more_chapters.clone();
         for page in 0..total_toc_pages {
-            let res = client.get(&url, None).await?;
+            let res = client.get(&url).await?;
             let doc = Html::parse_document(&res);
             for script in doc.select(&Selector::parse("script")?) {
                 let text = script.text().collect::<Vec<_>>().join("");
@@ -93,7 +105,12 @@ impl Downloader for RanobesParser {
 
     async fn get_chapter(&self, client: &mut Client, url: &str) -> Result<String, Error> {
         let res = client
-            .get_or_kill(url, Some(&WaitFor::id("arrticle")))
+            .request(
+                Request::get(url)
+                    .wait_for(WaitFor::id("arrticle"))
+                    .with_kill()
+                    .build(),
+            )
             .await?;
         let document = Html::parse_document(&res);
         match document.select(&Selector::parse("div#arrticle")?).next() {

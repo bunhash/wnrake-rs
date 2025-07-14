@@ -13,7 +13,12 @@ pub fn ensure_dir(dir: &str) -> Result<(), Error> {
 }
 
 pub fn url_to_filename(index: usize, url: &str) -> String {
-    let filename = url.rsplit("/").next().unwrap_or("chapter").replace(" ", "");
+    let filename = url
+        .trim_end_matches("/")
+        .rsplit("/")
+        .next()
+        .unwrap_or("chapter")
+        .replace(" ", "");
     format!("{:04}-{}", index, filename)
 }
 

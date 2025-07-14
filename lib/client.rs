@@ -1,82 +1,13 @@
 //! Flaresolverr Client
 
-use crate::{cache::Cache, error::Error, proxy::Proxy, solution::Response};
-use serde_json::{Map, Number, Value};
+use crate::{
+    cache::Cache,
+    error::Error,
+    proxy::Proxy,
+    request::{Request, Session},
+    solution::Response,
+};
 use std::time::Duration;
-
-#[derive(Clone, Debug)]
-pub enum WaitFor {
-    Id(String),
-    XPath(String),
-    Link(String),
-    ExactLink(String),
-    Name(String),
-    Tag(String),
-    Class(String),
-    Selector(String),
-}
-
-impl WaitFor {
-    pub fn id(val: &str) -> Self {
-        WaitFor::Id(val.into())
-    }
-
-    pub fn xpath(val: &str) -> Self {
-        WaitFor::XPath(val.into())
-    }
-
-    pub fn link(val: &str) -> Self {
-        WaitFor::Link(val.into())
-    }
-
-    pub fn exact_link(val: &str) -> Self {
-        WaitFor::ExactLink(val.into())
-    }
-
-    pub fn name(val: &str) -> Self {
-        WaitFor::Name(val.into())
-    }
-
-    pub fn tag(val: &str) -> Self {
-        WaitFor::Tag(val.into())
-    }
-
-    pub fn class(val: &str) -> Self {
-        WaitFor::Class(val.into())
-    }
-
-    pub fn selector(val: &str) -> Self {
-        WaitFor::Selector(val.into())
-    }
-
-    /// Returns a reference to the type name
-    pub fn type_name(&self) -> &str {
-        match self {
-            WaitFor::Id(_) => "id",
-            WaitFor::XPath(_) => "xpath",
-            WaitFor::Link(_) => "link",
-            WaitFor::ExactLink(_) => "exact-link",
-            WaitFor::Name(_) => "name",
-            WaitFor::Tag(_) => "tag",
-            WaitFor::Class(_) => "class",
-            WaitFor::Selector(_) => "selector",
-        }
-    }
-
-    /// Returns a reference to the value
-    pub fn value(&self) -> &str {
-        match self {
-            WaitFor::Id(v) => v.as_str(),
-            WaitFor::XPath(v) => v.as_str(),
-            WaitFor::Link(v) => v.as_str(),
-            WaitFor::ExactLink(v) => v.as_str(),
-            WaitFor::Name(v) => v.as_str(),
-            WaitFor::Tag(v) => v.as_str(),
-            WaitFor::Class(v) => v.as_str(),
-            WaitFor::Selector(v) => v.as_str(),
-        }
-    }
-}
 
 #[derive(Clone, Debug)]
 pub struct Client {
@@ -146,126 +77,78 @@ impl Client {
         self.cache.as_ref()
     }
 
-    async fn post_data(&self, data: &Map<String, Value>) -> Result<Response, Error> {
-        // Send HTTP Post
-        let res = self.client.post(&self.solver).json(&data).send().await?;
+    /// Starts a flaresolverr session
+    pub async fn create_session(&mut self) -> Result<(), Error> {
+        let json = Session::create(self.proxy.as_ref());
+        let res = self.client.post(&self.solver).json(&json).send().await?;
         log::debug!("solver response: {:?}", &res);
 
         // Parse JSON
         let res = res.json::<Response>().await.map_err(Error::json)?;
-
-        // Get the status
         if res.status == "ok" {
-            Ok(res)
+            match res.session {
+                Some(session) => {
+                    log::debug!("created session: {}", &session);
+                    self.session = Some(session);
+                    Ok(())
+                }
+                None => Err(Error::solution("no session in response")),
+            }
         } else {
             log::debug!("solution error {:?}", &res);
             Err(Error::parse_solution_error(&res.message))
         }
     }
 
-    /// Starts a flaresolverr session
-    pub async fn create_session(&mut self) -> Result<(), Error> {
-        // Build the JSON request
-        // { "cmd" : "sessions.create", "proxy" : { "url" : <proxy> } }
-        let mut data = Map::new();
-        data.insert("cmd".into(), Value::String("sessions.create".into()));
-        if let Some(proxy) = &self.proxy {
-            data.insert("proxy".into(), proxy.to_json());
-        }
-
-        // Send command
-        let res = self.post_data(&data).await?;
-        match res.session {
-            Some(session) => {
-                log::debug!("created session: {}", &session);
-                self.session = Some(session);
-                Ok(())
-            }
-            None => Err(Error::solution("no session in response")),
-        }
-    }
-
     /// Ends the flaresolverr session
     pub async fn destroy_session(&mut self) -> Result<(), Error> {
         if let Some(session) = &self.session {
-            // Build the JSON request
-            // { "cmd" : "sessions.destory", "session" : <session> }
-            let mut data = Map::new();
-            data.insert("cmd".into(), Value::String("sessions.destroy".into()));
-            data.insert("session".into(), Value::String(session.into()));
-
-            // Send command
-            self.client.post(&self.solver).json(&data).send().await?;
+            let json = Session::destroy(session);
+            let _ = self.client.post(&self.solver).json(&json).send().await;
             log::debug!("destroyed session: {}", &session);
             self.session = None;
         }
         Ok(())
     }
 
-    pub async fn get(&mut self, url: &str, wait_for: Option<&WaitFor>) -> Result<String, Error> {
-        self._get(url, wait_for, true).await
-    }
-
-    pub async fn get_or_kill(
-        &mut self,
-        url: &str,
-        wait_for: Option<&WaitFor>,
-    ) -> Result<String, Error> {
-        self._get(url, wait_for, false).await
-    }
-
-    /// Does a HTTP GET on the URL, solving a CloudFlare challenge, if necessary. Will attempt 3
-    /// times.
-    async fn _get(
-        &mut self,
-        url: &str,
-        wait_for: Option<&WaitFor>,
-        no_kill: bool,
-    ) -> Result<String, Error> {
-        let has_cache = self.cache.is_some();
-        if has_cache {
-            let res = self.cache.as_ref().expect("cache should exist").get(url)?;
+    pub async fn request(&mut self, mut request: Request) -> Result<String, Error> {
+        request.max_timeout = self.timeout.as_millis();
+        request.session = self.session.clone();
+        if request.enable_cache && self.cache.is_some() {
+            let res = self
+                .cache
+                .as_ref()
+                .expect("cache should exist")
+                .get(&request.url)?;
             match res {
                 Some(res) => {
-                    log::debug!("{} found in cache", url);
+                    log::debug!("{} found in cache", request.url);
                     Ok(res)
                 }
                 None => {
-                    log::debug!("{} not found in cache", url);
-                    let res = self.n_attempts(url, wait_for, no_kill, 5).await?;
+                    log::debug!("{} not found in cache", request.url);
+                    let res = self.n_requests(&mut request, 5).await?;
                     self.cache
                         .as_ref()
                         .expect("cache should exist")
-                        .insert(url, res.as_bytes())?;
+                        .insert(&request.url, res.as_bytes())?;
                     Ok(res)
                 }
             }
         } else {
-            self.fetch(url, wait_for, no_kill).await
+            Ok(self.n_requests(&mut request, 5).await?)
         }
     }
 
-    /// Recovers by resetting the session and restarting the proxy (if possible)
-    pub async fn recover(&mut self, seconds: u64) -> Result<(), Error> {
-        self.destroy_session().await?;
-        if let Some(proxy) = self.proxy.as_ref() {
-            proxy.restart(seconds).await?;
-        }
-        self.create_session().await
-    }
-
-    async fn n_attempts(
+    async fn n_requests(
         &mut self,
-        url: &str,
-        wait_for: Option<&WaitFor>,
-        no_kill: bool,
+        request: &Request,
         max_attempts: usize,
     ) -> Result<String, Error> {
-        log::debug!("fetching {}", url);
         let mut attempts = 0;
         loop {
             // Send command
-            match self.fetch(url, wait_for, no_kill).await {
+            match self._request(request).await {
                 Ok(res) => return Ok(res),
                 Err(e) => match e.fatal {
                     true => {
@@ -304,42 +187,47 @@ impl Client {
         }
     }
 
-    async fn fetch(
-        &mut self,
-        url: &str,
-        wait_for: Option<&WaitFor>,
-        no_kill: bool,
-    ) -> Result<String, Error> {
-        // Build the JSON request
-        // { "cmd" : "request.get", "url" : <url>, "maxTimeout" : <timeout>, "session" : <session> }
-        let mut data = Map::new();
-        data.insert("cmd".into(), Value::String("request.get".into()));
-        data.insert("url".into(), Value::String(url.into()));
-        data.insert(
-            "maxTimeout".into(),
-            Value::Number(Number::from_u128(self.timeout.as_millis()).expect("bad duration value")),
-        );
-        if let Some(wf) = wait_for {
-            data.insert("waitType".into(), wf.type_name().into());
-            data.insert("waitFor".into(), wf.value().into());
-        }
-        if let Some(session) = &self.session {
-            data.insert("session".into(), Value::String(session.into()));
-        }
-        if no_kill {
-            data.insert("noKill".into(), "true".into());
-        }
-        let res = self.post_data(&data).await?;
-        match res.solution {
-            Some(solution) => {
-                if solution.status == 200 {
-                    Ok(solution.response)
-                } else {
-                    Err(Error::status(solution.status))
+    async fn _request(&self, request: &Request) -> Result<String, Error> {
+        // Send HTTP Post
+        let res = self.client.post(&self.solver).json(request).send().await?;
+        log::debug!("solver response: {:?}", &res);
+
+        // Parse JSON
+        let res = res.json::<Response>().await.map_err(Error::json)?;
+
+        // Get the status
+        if res.status == "ok" {
+            match res.solution {
+                Some(solution) => {
+                    if solution.status == 200 {
+                        Ok(solution.response)
+                    } else {
+                        Err(Error::status(solution.status))
+                    }
                 }
+                None => Err(Error::solution("no solution in response")),
             }
-            None => Err(Error::solution("no solution in response")),
+        } else {
+            log::debug!("solution error {:?}", &res);
+            Err(Error::parse_solution_error(&res.message))
         }
+    }
+
+    pub async fn get(&mut self, url: &str) -> Result<String, Error> {
+        self.request(Request::get(url).build()).await
+    }
+
+    pub async fn post(&mut self, url: &str, post_data: &[(&str, &str)]) -> Result<String, Error> {
+        self.request(Request::post(url).post_data(post_data).build())
+            .await
+    }
+
+    pub async fn recover(&mut self, seconds: u64) -> Result<(), Error> {
+        self.destroy_session().await?;
+        if let Some(proxy) = &self.proxy {
+            proxy.restart(seconds).await?;
+        }
+        self.create_session().await
     }
 }
 

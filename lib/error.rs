@@ -7,6 +7,9 @@ pub enum ErrorType {
     /// Configuration file errors
     Config,
 
+    /// EPUB building errors
+    Epub,
+
     /// HTML parsing errors
     Html,
 
@@ -36,6 +39,7 @@ impl fmt::Display for ErrorType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             ErrorType::Config => f.write_str("config"),
+            ErrorType::Epub => f.write_str("epub"),
             ErrorType::Html => f.write_str("html"),
             ErrorType::Io => f.write_str("io"),
             ErrorType::Json => f.write_str("json"),
@@ -83,6 +87,12 @@ impl<'a> From<scraper::error::SelectorErrorKind<'a>> for Error {
     }
 }
 
+impl<'a> From<epub_builder::Error> for Error {
+    fn from(error: epub_builder::Error) -> Self {
+        Error::epub(error)
+    }
+}
+
 impl Error {
     pub fn parse_solution_error(msg: impl fmt::Display) -> Error {
         let message = format!("{}", msg);
@@ -110,6 +120,14 @@ impl Error {
     pub fn config(msg: impl fmt::Display) -> Error {
         Error {
             error_type: ErrorType::Config,
+            fatal: true,
+            message: format!("{}", msg),
+        }
+    }
+
+    pub fn epub(msg: impl fmt::Display) -> Error {
+        Error {
+            error_type: ErrorType::Epub,
             fatal: true,
             message: format!("{}", msg),
         }

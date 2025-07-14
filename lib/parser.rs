@@ -9,8 +9,12 @@ use async_trait::async_trait;
 use reqwest::Url;
 
 mod ranobes_top;
+mod royalroad_com;
+mod scribblehub_com;
 
 pub use ranobes_top::RanobesParser;
+pub use royalroad_com::RoyalRoadParser;
+pub use scribblehub_com::ScribbleHubParser;
 
 /// Trait for webnovel parsers
 #[async_trait]
@@ -19,7 +23,12 @@ pub trait Downloader {
     async fn get_book_info(&self, client: &mut Client, url: &str) -> Result<String, Error>;
 
     /// Returns a list of URLs for each chapter (in order)
-    async fn get_chapterlist(&self, client: &mut Client, html: &str) -> Result<UrlCache, Error>;
+    async fn get_chapterlist(
+        &self,
+        client: &mut Client,
+        url: &str,
+        html: &str,
+    ) -> Result<UrlCache, Error>;
 
     /// Returns the chapter's HTML
     async fn get_chapter(&self, client: &mut Client, url: &str) -> Result<String, Error>;
@@ -39,6 +48,8 @@ pub trait Parser {
 #[derive(Clone, Debug)]
 pub enum WnParser {
     Ranobes(RanobesParser),
+    RoyalRoad(RoyalRoadParser),
+    ScribbleHub(ScribbleHubParser),
 }
 
 impl TryFrom<&str> for WnParser {
@@ -48,6 +59,10 @@ impl TryFrom<&str> for WnParser {
         match url.domain() {
             Some("ranobes.top") => Ok(WnParser::Ranobes(RanobesParser)),
             Some("www.ranobes.top") => Ok(WnParser::Ranobes(RanobesParser)),
+            Some("royalroad.com") => Ok(WnParser::RoyalRoad(RoyalRoadParser)),
+            Some("www.royalroad.com") => Ok(WnParser::RoyalRoad(RoyalRoadParser)),
+            Some("scribblehub.com") => Ok(WnParser::ScribbleHub(ScribbleHubParser)),
+            Some("www.scribblehub.com") => Ok(WnParser::ScribbleHub(ScribbleHubParser)),
             _ => Err(Error::parser(format!("invalid url: {}", url))),
         }
     }
@@ -58,18 +73,29 @@ impl Downloader for WnParser {
     async fn get_book_info(&self, client: &mut Client, url: &str) -> Result<String, Error> {
         match self {
             WnParser::Ranobes(parser) => parser.get_book_info(client, url).await,
+            WnParser::RoyalRoad(parser) => parser.get_book_info(client, url).await,
+            WnParser::ScribbleHub(parser) => parser.get_book_info(client, url).await,
         }
     }
 
-    async fn get_chapterlist(&self, client: &mut Client, html: &str) -> Result<UrlCache, Error> {
+    async fn get_chapterlist(
+        &self,
+        client: &mut Client,
+        url: &str,
+        html: &str,
+    ) -> Result<UrlCache, Error> {
         match self {
-            WnParser::Ranobes(parser) => parser.get_chapterlist(client, html).await,
+            WnParser::Ranobes(parser) => parser.get_chapterlist(client, url, html).await,
+            WnParser::RoyalRoad(parser) => parser.get_chapterlist(client, url, html).await,
+            WnParser::ScribbleHub(parser) => parser.get_chapterlist(client, url, html).await,
         }
     }
 
     async fn get_chapter(&self, client: &mut Client, url: &str) -> Result<String, Error> {
         match self {
             WnParser::Ranobes(parser) => parser.get_chapter(client, url).await,
+            WnParser::RoyalRoad(parser) => parser.get_chapter(client, url).await,
+            WnParser::ScribbleHub(parser) => parser.get_chapter(client, url).await,
         }
     }
 }
@@ -78,18 +104,24 @@ impl Parser for WnParser {
     fn parse_book_info(&self, url: &str, html: &str) -> Result<BookInfo, Error> {
         match self {
             WnParser::Ranobes(parser) => parser.parse_book_info(url, html),
+            WnParser::RoyalRoad(parser) => parser.parse_book_info(url, html),
+            WnParser::ScribbleHub(parser) => parser.parse_book_info(url, html),
         }
     }
 
     fn parse_chapter(&self, html: &str) -> Result<Chapter, Error> {
         match self {
             WnParser::Ranobes(parser) => parser.parse_chapter(html),
+            WnParser::RoyalRoad(parser) => parser.parse_chapter(html),
+            WnParser::ScribbleHub(parser) => parser.parse_chapter(html),
         }
     }
 
     fn next_page(&self, html: &str) -> Result<Option<String>, Error> {
         match self {
             WnParser::Ranobes(parser) => parser.next_page(html),
+            WnParser::RoyalRoad(parser) => parser.next_page(html),
+            WnParser::ScribbleHub(parser) => parser.next_page(html),
         }
     }
 }

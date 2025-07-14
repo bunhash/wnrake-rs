@@ -64,9 +64,13 @@ impl Parse {
             chapters
                 .iter()
                 .enumerate()
-                .map(|(index, title)| ChapterInfo {
-                    filename: utils::index_to_filename(index),
-                    title: title.as_deref().unwrap_or("???").into(),
+                .map(|(index, title)| {
+                    let parsed_filename = utils::index_to_filename(index);
+                    let filename = Path::join(Path::new("book"), &parsed_filename);
+                    ChapterInfo {
+                        path: filename.as_os_str().to_str().expect("bad filename?").into(),
+                        title: title.as_deref().unwrap_or("???").into(),
+                    }
                 })
                 .collect::<Vec<_>>(),
         );

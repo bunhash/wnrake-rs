@@ -77,7 +77,7 @@ impl Info {
 
         // Fetch url cache
         log::debug!("fetching chapter list");
-        let url_cache = parser.get_chapterlist(client, &res).await?;
+        let url_cache = parser.get_chapterlist(client, &url, &res).await?;
         log::debug!("found {} chapters", url_cache.0.len());
 
         // Write url cache

@@ -5,7 +5,7 @@ use serde_json::Value;
 
 #[derive(Clone, Debug, Deserialize)]
 #[allow(dead_code)]
-pub(crate) struct Solution {
+pub struct Solution {
     pub url: String,
     pub status: u16,
     pub headers: Value,

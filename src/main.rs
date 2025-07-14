@@ -9,6 +9,7 @@ use wnrake::{
 
 mod build;
 mod crawl;
+mod debug;
 mod download;
 mod info;
 mod parse;
@@ -21,9 +22,17 @@ struct Cli {
     #[arg(long)]
     debug: bool,
 
+    /// Error only logging
+    #[arg(long)]
+    errors: bool,
+
     /// Verbose logging
     #[arg(short, long)]
     verbose: bool,
+
+    /// No logging
+    #[arg(short, long)]
+    silent: bool,
 
     /// Configuration file
     #[arg(short = 'f')]
@@ -67,6 +76,9 @@ enum Command {
 
     /// Builds epub book
     Build(build::Build),
+
+    /// Builds epub book
+    Debug(debug::Debug),
 }
 
 fn load_configuration(
@@ -109,7 +121,11 @@ async fn dispatcher() -> Result<(), Error> {
     // Initialize logger
     let mut builder = env_logger::Builder::new();
     builder.format_timestamp(None);
-    if cli.debug {
+    if cli.silent {
+        builder.filter_level(LevelFilter::Off);
+    } else if cli.errors {
+        builder.filter_level(LevelFilter::Error);
+    } else if cli.debug {
         builder.filter_level(LevelFilter::Debug);
     } else if cli.verbose {
         builder
@@ -137,7 +153,8 @@ async fn dispatcher() -> Result<(), Error> {
         Command::Download(cmd) => cmd.execute(&config).await,
         Command::Crawl(cmd) => cmd.execute(&config).await,
         Command::Parse(cmd) => cmd.execute(&config).await,
-        Command::Build(cmd) => cmd.execute(&config).await,
+        Command::Build(cmd) => cmd.execute(&config),
+        Command::Debug(cmd) => cmd.execute(&config).await,
     }
 }
 
@@ -147,14 +164,15 @@ fn main() {
             log::error!("{}", e);
             match e.error_type {
                 ErrorType::Config => 1,
-                ErrorType::Html => 2,
-                ErrorType::Io => 3,
-                ErrorType::Json => 4,
-                ErrorType::Parser => 5,
-                ErrorType::Proxy => 6,
-                ErrorType::Solution => 7,
-                ErrorType::Solver => 8,
-                ErrorType::Status => 9,
+                ErrorType::Epub => 2,
+                ErrorType::Html => 3,
+                ErrorType::Io => 4,
+                ErrorType::Json => 5,
+                ErrorType::Parser => 6,
+                ErrorType::Proxy => 7,
+                ErrorType::Solution => 8,
+                ErrorType::Solver => 9,
+                ErrorType::Status => 10,
             }
         }
         Ok(_) => 0,
