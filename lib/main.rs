@@ -8,4 +8,4 @@ pub mod error;
 pub mod parser;
 pub mod proxy;
 pub mod request;
-pub mod solution;
+pub mod response;

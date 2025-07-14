@@ -5,7 +5,7 @@ use crate::{
     error::Error,
     proxy::Proxy,
     request::{Request, Session},
-    solution::Response,
+    response::Response,
 };
 use std::time::Duration;
 
