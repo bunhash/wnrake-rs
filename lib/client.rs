@@ -127,7 +127,8 @@ impl Client {
                 }
                 None => {
                     log::debug!("{} not found in cache", request.url);
-                    let res = self.n_requests(&mut request, 5).await?;
+                    let attempts = request.attempts;
+                    let res = self.n_requests(&mut request, attempts).await?;
                     self.cache
                         .as_ref()
                         .expect("cache should exist")

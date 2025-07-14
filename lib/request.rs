@@ -143,6 +143,8 @@ pub struct Request {
     #[serde(rename = "postData", skip_serializing_if = "Option::is_none")]
     pub(crate) post_data: Option<String>,
     #[serde(skip_serializing)]
+    pub(crate) attempts: usize,
+    #[serde(skip_serializing)]
     pub(crate) enable_cache: bool,
 }
 
@@ -171,6 +173,7 @@ impl RequestBuilder {
             no_kill: true,
             post_data: None,
             enable_cache: true,
+            attempts: 5,
         })
     }
 
@@ -185,6 +188,7 @@ impl RequestBuilder {
             no_kill: true,
             post_data: Some("".into()),
             enable_cache: false,
+            attempts: 3,
         })
     }
 
@@ -232,6 +236,16 @@ impl RequestBuilder {
 
     pub fn disable_cache(mut self) -> Self {
         self.0.enable_cache = false;
+        self
+    }
+
+    pub fn attempts(mut self, attempts: usize) -> Self {
+        self.0.attempts = attempts;
+        self
+    }
+
+    pub fn do_once(mut self) -> Self {
+        self.0.attempts = 1;
         self
     }
 
