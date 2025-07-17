@@ -13,6 +13,10 @@ pub struct Build {
     /// Appends `(Ongoing)` to the title
     #[arg(long)]
     ongoing: bool,
+
+    /// Skip AZW3 conversion
+    #[arg(long)]
+    azw3: bool,
 }
 
 impl Build {
@@ -43,14 +47,16 @@ impl Build {
         let epub = EpubBook::new(bookinfo, chapterlist, cover);
         epub.to_file(filename.as_str())?;
 
-        log::info!("Converting to AZW3 ...");
-        let azw3_filename = format!("{}.azw3", filename.trim_end_matches(".epub"));
-        match Command::new("ebook-convert")
-            .args([filename.as_str(), azw3_filename.as_str(), "--no-inline-toc"])
-            .output()
-        {
-            Ok(_) => log::info!("Complete"),
-            Err(e) => log::error!("{}", e),
+        if self.azw3 {
+            log::info!("Converting to AZW3 ...");
+            let azw3_filename = format!("{}.azw3", filename.trim_end_matches(".epub"));
+            match Command::new("ebook-convert")
+                .args([filename.as_str(), azw3_filename.as_str(), "--no-inline-toc"])
+                .output()
+            {
+                Ok(_) => log::info!("Complete"),
+                Err(e) => log::error!("{}", e),
+            }
         }
 
         Ok(())

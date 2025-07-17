@@ -4,7 +4,7 @@ use crate::{
     book::{BookInfo, Chapter, UrlCache},
     client::Client,
     error::Error,
-    parser::{Downloader, Parser},
+    parser::{Downloader, Parser, utils},
     request::{Request, WaitFor},
 };
 use async_trait::async_trait;
@@ -103,6 +103,7 @@ impl Parser for RoyalRoadParser {
     fn parse_chapter(&self, html: &str) -> Result<Chapter, Error> {
         let document = Html::parse_document(&html);
 
+        // Get title
         let title = document
             .select(&Selector::parse("div.fic-header h1")?)
             .next()
@@ -113,46 +114,23 @@ impl Parser for RoyalRoadParser {
             .trim()
             .to_string();
 
+        // Get chapter div
         let chapter = document
             .select(&Selector::parse("div.chapter-content")?)
             .next()
             .ok_or(Error::html("expected div.chapter-content", true))?;
 
-        let mut paragraphs = Vec::new();
-        for child in chapter.select(&Selector::parse("p,div")?) {
-            let text = child.text().collect::<Vec<_>>().join("").trim().to_string();
-            if !text.is_empty() {
-                paragraphs.push(child.html());
-            }
-        }
-        if paragraphs.is_empty() {
-            let new_chapter = chapter
-                .html()
-                .replace("<br>", "\n")
-                .replace("<br/>", "\n")
-                .replace("</br>", "");
-            let chapter = Html::parse_fragment(&new_chapter);
-            let text = chapter
-                .select(&Selector::parse("div")?)
-                .next()
-                .ok_or(Error::html("div should exist", true))?
-                .text()
-                .collect::<Vec<_>>()
-                .join("");
-            for line in text.lines() {
-                let para = line.trim();
-                if !para.is_empty() {
-                    paragraphs.push(format!("<p>{}</p>", para));
-                }
-            }
-        }
+        // Build HTML
+        let html = utils::parse_content(&title, chapter)?;
 
+        /*
         // Build HTML
         let html = format!(
-            "<html><body><h1>{}</h1>{}</body></html>",
+            "<html><head></head><body><h1>{}</h1>{}</body></html>",
             title,
-            paragraphs.join("")
+            utils::parse_content(chapter)?,
         );
+        */
 
         // Return chapter
         Ok(Chapter { title, html })

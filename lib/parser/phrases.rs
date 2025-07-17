@@ -1,0 +1,58 @@
+pub static COPYRIGHT_TRIGGER_LENGTH: usize = 200;
+pub static COPYRIGHT_TRIGGER_THRESHOLD: usize = 8;
+pub static COPYRIGHT_TRIGGER_COUNT: usize = 4;
+pub static COPYRIGHT_TRIGGERS: &[(&str, usize)] = &[
+    // Big red flags
+    ("amazon", 6),
+    ("royal road", 6),
+    // Actions
+    ("hosted", 2),
+    ("lifted", 1),
+    ("misappropriated", 2),
+    ("originate", 2),
+    ("pilfered", 2),
+    ("pirate", 3),
+    ("report", 3),
+    ("stolen", 2),
+    ("support", 1),
+    ("taken", 2),
+    // Access wording
+    ("authorization", 3),
+    ("consent", 1),
+    ("genuine", 2),
+    ("illegal", 2),
+    ("illicit", 3),
+    ("infringe", 3),
+    ("lifted", 1),
+    ("official", 1),
+    ("original", 1),
+    ("permission", 1),
+    ("prefer", 1),
+    ("unauthorized", 3),
+    ("unlawful", 3),
+    ("violation", 2),
+    // Book synonyms
+    ("book", 2),
+    ("content", 2),
+    ("fiction", 2),
+    ("instance", 1),
+    ("narrative", 3),
+    ("novel", 3),
+    ("publication", 3),
+    ("publish", 3),
+    ("release", 1),
+    ("stories", 2),
+    ("story", 2),
+    ("tale", 2),
+    ("text", 1),
+    ("usage", 1),
+    ("version", 2),
+    ("work", 1),
+    // Misc flags
+    ("author", 1),
+    ("creativ", 2),
+    ("occurrence", 1),
+    ("site", 3),
+    ("platform", 2),
+    ("website", 3),
+];

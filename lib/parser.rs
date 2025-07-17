@@ -11,6 +11,8 @@ use reqwest::Url;
 mod ranobes_top;
 mod royalroad_com;
 mod scribblehub_com;
+mod utils;
+mod phrases;
 
 pub use ranobes_top::RanobesParser;
 pub use royalroad_com::RoyalRoadParser;

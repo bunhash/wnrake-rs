@@ -1,11 +1,18 @@
 //! Book structures
 
-use crate::error::Error;
+use crate::{
+    error::Error,
+    xhtml::{Element, XhtmlBuilder},
+};
 use epub_builder::{EpubBuilder, EpubContent, ReferenceType, ZipLibrary};
 use std::{
     fs::File,
     io::{self, BufRead, Write},
 };
+
+mod css;
+
+use css::CSS_TEMPLATE;
 
 #[cfg(windows)]
 const LINE_ENDING: &'static [u8] = b"\r\n";
@@ -172,29 +179,41 @@ pub struct EpubBook {
     cover: Option<File>,
 }
 
-static CSS_STYLE: &str = r#"
+/*
+static CSS_TEMPLATE: &str = r#"
 @namespace epub "http://www.idpf.org/2007/ops";
+
 body {
     font-family: Cambria, Liberation Serif, Bitstream Vera Serif, Georgia, Times, Times New Roman, serif;
 }
+
 h2 {
     text-align: left;
     text-transform: uppercase;
     font-weight: 200;
 }
-ol {
+
+table {
+    font-weight: 100;
+}
+
+ul {
     list-style-type: none;
 }
-ol > li:first-child {
+
+ul > li:first-child {
     margin-top: 0.3em;
 }
-    nav[epub|type~='toc'] > ol > li > ol  {
+
+nav[epub|type~='toc'] > ul > li > ul  {
     list-style-type:square;
 }
-    nav[epub|type~='toc'] > ol > li > ol > li {
+
+nav[epub|type~='toc'] > ul > li > ul > li {
     margin-top: 0.3em;
 }
 "#;
+*/
 
 impl EpubBook {
     pub fn new(bookinfo: BookInfo, chapterlist: ChapterList, cover: Option<File>) -> Self {
@@ -214,24 +233,25 @@ impl EpubBook {
         builder
             .metadata("title", self.bookinfo.title.as_str())?
             .metadata("author", self.bookinfo.author.as_str())?
-            .stylesheet(CSS_STYLE.as_bytes())?;
+            .stylesheet(CSS_TEMPLATE.as_bytes())?;
 
         if let Some(cover) = &self.cover {
+            let xhtml = XhtmlBuilder::new("Cover");
+            xhtml.append_image(xhtml.article(), "cover.jpg");
             builder.add_cover_image("cover.jpg", cover, "image/jpeg")?;
             builder.add_content(
-                EpubContent::new(
-                    "cover.xhtml",
-                    r#"<html><image src="cover.jpg"/></html>"#.as_bytes(),
-                )
-                .title("Cover")
-                .reftype(ReferenceType::Cover),
+                EpubContent::new("cover.xhtml", xhtml.build().as_bytes())
+                    .title("Cover")
+                    .reftype(ReferenceType::Cover),
             )?;
         }
 
-        let title_contents = format!(
-            r#"<html><body><h1>{}</h1><h2>{}</h2></body></html>"#,
-            self.bookinfo.title, self.bookinfo.author
-        );
+        let title_contents = {
+            let xhtml = XhtmlBuilder::with_header(self.bookinfo.title.as_str());
+            let author_id = xhtml.append_element(xhtml.article(), Element::H2)?;
+            xhtml.append_text(author_id, self.bookinfo.author.clone());
+            xhtml.build()
+        };
         builder.add_content(
             EpubContent::new("title.xhtml", title_contents.as_bytes())
                 .title("Title")

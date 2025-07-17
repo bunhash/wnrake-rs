@@ -9,3 +9,4 @@ pub mod parser;
 pub mod proxy;
 pub mod request;
 pub mod response;
+pub mod xhtml;

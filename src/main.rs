@@ -22,7 +22,7 @@ struct Cli {
     #[arg(long)]
     debug: bool,
 
-    /// Error only logging
+    /// Error and warning only logging
     #[arg(long)]
     errors: bool,
 
@@ -124,7 +124,7 @@ async fn dispatcher() -> Result<(), Error> {
     if cli.silent {
         builder.filter_level(LevelFilter::Off);
     } else if cli.errors {
-        builder.filter_level(LevelFilter::Error);
+        builder.filter_level(LevelFilter::Warn);
     } else if cli.debug {
         builder.filter_level(LevelFilter::Debug);
     } else if cli.verbose {

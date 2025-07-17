@@ -4,7 +4,7 @@ use crate::{
     book::{BookInfo, Chapter, UrlCache},
     client::Client,
     error::Error,
-    parser::{Downloader, Parser},
+    parser::{Downloader, Parser, utils},
     request::{Request, WaitFor},
 };
 use async_trait::async_trait;
@@ -169,6 +169,7 @@ impl Parser for ScribbleHubParser {
             .trim()
             .to_string();
 
+        /*
         // Get chapter
         let paragraphs = document
             .select(&Selector::parse("div#chp_raw")?)
@@ -180,10 +181,29 @@ impl Parser for ScribbleHubParser {
 
         // Build HTML
         let html = format!(
-            "<html><body><h1>{}</h1>{}</body></html>",
+            "<html><head></head><body><h1>{}</h1>{}</body></html>",
             title,
             paragraphs.join(""),
         );
+        */
+
+        // Get chapter
+        let chapter = document
+            .select(&Selector::parse("div#chp_raw")?)
+            .next()
+            .ok_or(Error::html("expected id=chp_raw", true))?;
+
+        // Build HTML
+        let html = utils::parse_content(&title, chapter)?;
+
+        /*
+        // Build HTML
+        let html = format!(
+            "<html><head></head><body><h1>{}</h1>{}</body></html>",
+            title,
+            utils::parse_content(chapter)?,
+        );
+        */
 
         // Return chapter
         Ok(Chapter { title, html })

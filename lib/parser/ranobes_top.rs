@@ -4,7 +4,7 @@ use crate::{
     book::{BookInfo, Chapter, UrlCache},
     client::Client,
     error::Error,
-    parser::{Downloader, Parser},
+    parser::{Downloader, Parser, utils},
     request::{Request, WaitFor},
 };
 use async_trait::async_trait;
@@ -222,18 +222,23 @@ impl Parser for RanobesParser {
             None => "???".into(),
         };
 
-        // Parse the chapter
+        // Get chapter content
         let chapter = document
             .select(&Selector::parse("div#arrticle")?)
             .next()
             .ok_or(Error::html("arrticle not in html", true))?;
 
         // Build HTML
+        let html = utils::parse_content(&title, chapter)?;
+
+        /*
+        // Build HTML
         let html = format!(
-            "<html><body><h1>{}</h1>{}</body></html>",
+            "<html><head></head><body><h1>{}</h1>{}</body></html>",
             title,
             chapter.inner_html().trim()
         );
+        */
 
         // Return chapter
         Ok(Chapter { title, html })
