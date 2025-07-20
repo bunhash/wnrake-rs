@@ -57,6 +57,8 @@ impl Build {
                 Ok(_) => log::info!("Complete"),
                 Err(e) => log::error!("{}", e),
             }
+        } else {
+            log::info!("Complete");
         }
 
         Ok(())

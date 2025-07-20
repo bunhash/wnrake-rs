@@ -50,6 +50,10 @@ fn parse_inner_content<'a>(
         "p" => append_element(xhtml, parent, Element::P)?,
         "i" | "em" => append_element(xhtml, parent, Element::Em)?,
         "b" | "strong" => append_element(xhtml, parent, Element::Strong)?,
+        "hr" => {
+            let attrs = el.attrs().collect::<Vec<_>>();
+            append_element_with_attrs(xhtml, parent, Element::Hr, attrs.as_ref())?
+        }
         "span" => match el.attr("style") {
             Some(style) => {
                 // Filter out font-family and font-size. Too unpredictable.

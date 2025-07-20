@@ -114,7 +114,6 @@ impl Client {
     /// Processes the flaresolverr request
     pub async fn request(&mut self, mut request: Request) -> Result<String, Error> {
         request.max_timeout = self.timeout.as_millis();
-        request.session = self.session.clone();
         let attempts = request.attempts;
         if request.enable_cache && self.cache.is_some() {
             let res = self
@@ -165,11 +164,13 @@ impl Client {
     /// Attempts the request and will recover from non-fatal errors up to N times
     async fn n_requests(
         &mut self,
-        request: &Request,
+        request: &mut Request,
         max_attempts: usize,
     ) -> Result<String, Error> {
         let mut attempts = 0;
         loop {
+            request.session = self.session.clone();
+
             // Send command
             match self._request(request).await {
                 Ok(res) => return Ok(res),
