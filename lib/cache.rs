@@ -50,15 +50,13 @@ impl Cache {
     }
 
     fn url_to_path(&self, url: &str) -> PathBuf {
-        Path::join(
-            &self.dir,
-            &format!(
-                "{}_{}",
-                &self.prefix,
-                url.replace(":", "").replace("//", "/").replace("/", "_")
-            ),
-        )
-        .into()
+        let filename = url
+            .replace(":", "")
+            .replace("//", "/")
+            .replace("/", "_")
+            .replace("?", "_");
+        log::debug!("using cache filename: {}", filename);
+        Path::join(&self.dir, &format!("{}_{}", &self.prefix, filename)).into()
     }
 
     /// Fetches from the cache

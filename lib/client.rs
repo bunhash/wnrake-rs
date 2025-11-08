@@ -174,7 +174,7 @@ impl Client {
             // Send command
             match self._request(request).await {
                 Ok(res) => return Ok(res),
-                Err(e) => match e.fatal {
+                Err(mut e) => match e.fatal {
                     true => {
                         log::error!("fatal: {}", e);
                         return Err(e);
@@ -183,6 +183,7 @@ impl Client {
                         attempts = attempts + 1;
                         log::error!("({}/{}) attempts: {}", attempts, max_attempts, e);
                         if attempts >= max_attempts {
+                            e.fatal = true;
                             return Err(e);
                         }
                     }
@@ -193,7 +194,7 @@ impl Client {
             loop {
                 match self.recover(60).await {
                     Ok(_) => break,
-                    Err(e) => match e.fatal {
+                    Err(mut e) => match e.fatal {
                         true => {
                             log::error!("fatal: {}", e);
                             return Err(e);
@@ -202,6 +203,7 @@ impl Client {
                             attempts = attempts + 1;
                             log::error!("({}/{}) attempts: {}", attempts, max_attempts, e);
                             if attempts >= max_attempts {
+                                e.fatal = true;
                                 return Err(e);
                             }
                         }

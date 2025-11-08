@@ -8,7 +8,7 @@ use crate::{
 };
 use config::{File, FileFormat};
 use serde::Deserialize;
-use std::collections::{HashMap, hash_map::Keys};
+use std::collections::{hash_map::Keys, HashMap};
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct Config {
@@ -136,13 +136,6 @@ impl ConfigBuilder {
         self
     }
 
-    pub fn disable_cache(mut self, disable_cache: bool) -> Self {
-        if disable_cache {
-            self.inner.cache = None;
-        }
-        self
-    }
-
     pub fn cache(mut self, cache: Option<String>) -> Self {
         if let Some(cache) = cache {
             self.inner.cache = Some(cache);
@@ -150,9 +143,23 @@ impl ConfigBuilder {
         self
     }
 
+    pub fn disable_cache(mut self, disable_cache: bool) -> Self {
+        if disable_cache {
+            self.inner.cache = None;
+        }
+        self
+    }
+
     pub fn proxy(mut self, proxy: Option<String>) -> Self {
         if let Some(proxy) = proxy {
             self.inner.proxy = Some(proxy);
+        }
+        self
+    }
+
+    pub fn disable_proxy(mut self, disable_proxy: bool) -> Self {
+        if disable_proxy {
+            self.inner.proxy = None;
         }
         self
     }

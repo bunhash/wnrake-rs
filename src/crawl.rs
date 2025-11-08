@@ -67,11 +67,28 @@ impl Crawl {
 
                     // Download
                     log::info!("({:>4}/{:>4}) Downloading {}", i + 1, total_chapters, url);
-                    let chapter = parser.get_chapter(client, url).await?;
-
-                    // Write file
-                    let mut file = File::create(path)?;
-                    file.write_all(chapter.as_bytes())?;
+                    let mut attempts = 0;
+                    let mut chapter = None;
+                    loop {
+                        match parser.get_chapter(client, url).await {
+                            Ok(c) => {
+                                chapter = Some(c);
+                                break;
+                            }
+                            Err(e) => {
+                                if e.fatal || attempts >= 3 {
+                                    return Err(e);
+                                }
+                                attempts = attempts + 1;
+                                client.recover(60).await?;
+                            }
+                        }
+                    }
+                    if let Some(c) = chapter {
+                        // Write file
+                        let mut file = File::create(path)?;
+                        file.write_all(c.as_bytes())?;
+                    }
                 }
             }
         }
@@ -89,20 +106,37 @@ impl Crawl {
 
             // Download
             log::info!("({:>4}/   ?) Downloading {}", index + 1, next_url);
-            let chapter = parser.get_chapter(client, next_url).await?;
-
-            // Write file
-            let mut file = File::create(path)?;
-            file.write_all(chapter.as_bytes())?;
-
-            // Get next page
-            index = index + 1;
-            match parser.next_page(&chapter)? {
-                Some(url) => {
-                    url_cache.push(url);
-                    next_url = url_cache.last().expect("UrlCache should not be empty");
+            let mut attempts = 0;
+            let mut chapter = None;
+            loop {
+                match parser.get_chapter(client, next_url).await {
+                    Ok(c) => {
+                        chapter = Some(c);
+                        break;
+                    }
+                    Err(e) => {
+                        if e.fatal || attempts >= 3 {
+                            return Err(e);
+                        }
+                        attempts = attempts + 1;
+                        client.recover(60).await?;
+                    }
                 }
-                None => break,
+            }
+            if let Some(c) = chapter {
+                // Write file
+                let mut file = File::create(path)?;
+                file.write_all(c.as_bytes())?;
+
+                // Get next page
+                index = index + 1;
+                match parser.next_page(&c)? {
+                    Some(url) => {
+                        url_cache.push(url);
+                        next_url = url_cache.last().expect("UrlCache should not be empty");
+                    }
+                    None => break,
+                }
             }
         }
 

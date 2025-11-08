@@ -178,7 +178,12 @@ impl Worker {
                             log::warn!("worker: {}", e);
                             let mut urls = self.urls.as_ref().lock().await;
                             urls.push_front((i, url));
-                            break;
+                            if e.fatal {
+                                break;
+                            }
+                            if self.client.recover(60).await.is_err() {
+                                break;
+                            }
                         }
                     }
                 }

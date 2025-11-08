@@ -42,7 +42,11 @@ fn parse_inner_content<'a>(
     let el = content.value();
     let tag = el.name();
     let node = match tag {
-        "br" => break_paragraph(xhtml, parent)?, // <br> doesn't work on azw3
+        "br" => {
+            let linebreak = append_element(xhtml, parent, Element::P)?;
+            append_text(xhtml, linebreak, ".".to_string())?;
+            parent
+        }
         "table" => append_element(xhtml, parent, Element::Table)?,
         "tr" => append_element(xhtml, parent, Element::Tr)?,
         "th" => append_element(xhtml, parent, Element::Th)?,
@@ -95,20 +99,22 @@ fn parse_node<'a>(
             let text = text.to_string();
             if !text.trim().is_empty() {
                 if filter(&text) {
-                    log::warn!("filtering: {}", text);
+                    log::debug!("filtering: {}", text);
                 } else {
+                    let len = if text.len() > 100 { 100 } else { text.len() };
+                    log::debug!("appending {:?} to {:?}", &text[0..len], parent);
                     append_text(xhtml, parent, text)?;
                 }
             }
+            Ok(())
         }
         Node::Element(_) => parse_inner_content(
             xhtml,
             parent,
             ElementRef::wrap(content).ok_or(Error::html("should be element", true))?,
-        )?,
-        _ => {}
+        ),
+        _ => Ok(()),
     }
-    Ok(())
 }
 
 /// I want to require <p></p> for stylized tags and spans. It presents itself better in ePub
@@ -123,27 +129,31 @@ where
     N: AsRef<str>,
     V: AsRef<str>,
 {
-    match element {
+    let node = match element {
         Element::Em | Element::Strong => match parent.element() {
             Element::P | Element::Span | Element::Em | Element::Strong => {
-                xhtml.append_element_with_attrs(parent, element, attrs)
+                xhtml.append_element_with_attrs(parent, element, attrs)?
             }
             _ => {
                 let p = xhtml.append_element(parent, Element::P)?;
-                xhtml.append_element_with_attrs(p, element, attrs)
+                log::debug!("created: {:?}", p);
+                xhtml.append_element_with_attrs(p, element, attrs)?
             }
         },
         Element::Span => match parent.element() {
             Element::P | Element::Span | Element::Em | Element::Strong => {
-                xhtml.append_element_with_attrs(parent, element, attrs)
+                xhtml.append_element_with_attrs(parent, element, attrs)?
             }
             _ => {
                 let p = xhtml.append_element(parent, Element::P)?;
-                xhtml.append_element_with_attrs(p, element, attrs)
+                log::debug!("created: {:?}", p);
+                xhtml.append_element_with_attrs(p, element, attrs)?
             }
         },
-        _ => xhtml.append_element_with_attrs(parent, element, attrs),
-    }
+        _ => xhtml.append_element_with_attrs(parent, element, attrs)?,
+    };
+    log::debug!("created: {:?}", node);
+    Ok(node)
 }
 
 fn append_element(
@@ -170,30 +180,34 @@ fn append_text(xhtml: &XhtmlBuilder, parent: XhtmlNode, text: String) -> Result<
 
 /// Breaks a paragraph but keeps its formatting
 fn break_paragraph(xhtml: &XhtmlBuilder, node: XhtmlNode) -> Result<XhtmlNode, Error> {
+    log::debug!("[br] old parent: {:?}", node);
     let mut stack = Vec::new();
     let mut node = node;
     loop {
         match node.element() {
             // Save these elements
-            Element::Span | Element::Em | Element::Strong => {
+            Element::P | Element::Span | Element::Em | Element::Strong => {
+                log::debug!("[br] saving: <{:?}>", node.element());
                 stack.push(node);
                 node = node
                     .parent(xhtml)
-                    .ok_or(Error::html("missing parent", true))?;
+                    .ok_or(Error::html("[br] missing parent", true))?;
             }
-            // Throw away the rest
-            Element::P => {
-                node = node
-                    .parent(xhtml)
-                    .ok_or(Error::html("missing parent", true))?;
+            _ => {
+                log::debug!("[br] stopping at: <{:?}>", node.element());
+                break;
             }
-            _ => break,
         }
     }
-    let mut parent = append_element(xhtml, node, Element::P)?;
-    while let Some(node) = stack.pop() {
-        let attrs = node.attrs(xhtml);
-        parent = append_element_with_attrs(xhtml, parent, node.element(), attrs.as_slice())?;
+    while let Some(child) = stack.pop() {
+        let attrs = child.attrs(xhtml);
+        log::debug!(
+            "[br] attaching <{:?}> to <{:?}>",
+            child.element(),
+            node.element()
+        );
+        node = append_element_with_attrs(xhtml, node, child.element(), attrs.as_slice())?;
     }
-    Ok(parent)
+    log::debug!("[br] new parent: {:?}", node);
+    Ok(node)
 }

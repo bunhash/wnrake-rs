@@ -50,6 +50,10 @@ struct Cli {
     #[arg(long, value_name = "DIR")]
     cache: Option<String>,
 
+    /// Disable proxy
+    #[arg(long)]
+    disable_proxy: bool,
+
     /// Name of proxy (in configuration file)
     #[arg(long, value_name = "NAME")]
     proxy: Option<String>,
@@ -86,6 +90,7 @@ fn load_configuration(
     solver: Option<String>,
     disable_cache: bool,
     cache: Option<String>,
+    disable_proxy: bool,
     proxy_name: Option<String>,
 ) -> Result<Config, Error> {
     let config_file = if config.is_some() {
@@ -109,8 +114,9 @@ fn load_configuration(
     Ok(builder
         .solver(solver)
         .cache(cache)
-        .proxy(proxy_name)
         .disable_cache(disable_cache)
+        .proxy(proxy_name)
+        .disable_proxy(disable_proxy)
         .build())
 }
 
@@ -143,6 +149,7 @@ async fn dispatcher() -> Result<(), Error> {
         cli.solver,
         cli.disable_cache,
         cli.cache,
+        cli.disable_proxy,
         cli.proxy,
     )?;
     log::debug!("{:?}", config);

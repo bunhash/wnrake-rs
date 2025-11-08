@@ -1,7 +1,11 @@
 //! build command
 
 use clap::Args;
-use std::{fs::File, path::Path, process::Command};
+use std::{
+    fs::{remove_file, rename, File},
+    path::Path,
+    process::Command,
+};
 use wnrake::{
     book::{BookInfo, ChapterList, EpubBook},
     config::Config,
@@ -14,7 +18,11 @@ pub struct Build {
     #[arg(long)]
     ongoing: bool,
 
-    /// Skip AZW3 conversion
+    /// Fixes some EPUB issues
+    #[arg(long)]
+    epub: bool,
+
+    /// Do AZW3 conversion
     #[arg(long)]
     azw3: bool,
 }
@@ -47,20 +55,37 @@ impl Build {
         let epub = EpubBook::new(bookinfo, chapterlist, cover);
         epub.to_file(filename.as_str())?;
 
+        if self.epub {
+            log::info!("Converting to EPUB ...");
+            let tmp_filename = format!("{} (tmp).epub", filename.trim_end_matches(".epub"));
+            match Command::new("ebook-convert")
+                .args([filename.as_str(), tmp_filename.as_str()])
+                .output()
+            {
+                Ok(_) => match remove_file(filename.as_str()) {
+                    Ok(_) => {
+                        if let Err(e) = rename(tmp_filename.as_str(), filename.as_str()) {
+                            log::error!("{}", e);
+                        }
+                    }
+                    Err(e) => log::error!("{}", e),
+                },
+                Err(e) => log::error!("{}", e),
+            }
+        }
+
         if self.azw3 {
             log::info!("Converting to AZW3 ...");
             let azw3_filename = format!("{}.azw3", filename.trim_end_matches(".epub"));
-            match Command::new("ebook-convert")
+            if let Err(e) = Command::new("ebook-convert")
                 .args([filename.as_str(), azw3_filename.as_str(), "--no-inline-toc"])
                 .output()
             {
-                Ok(_) => log::info!("Complete"),
-                Err(e) => log::error!("{}", e),
+                log::error!("{}", e);
             }
-        } else {
-            log::info!("Complete");
         }
 
+        log::info!("Complete");
         Ok(())
     }
 }

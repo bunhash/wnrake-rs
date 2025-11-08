@@ -39,7 +39,7 @@ impl Downloader for RoyalRoadParser {
                 Some(link) => {
                     let uri = link
                         .attr("href")
-                        .ok_or(Error::html("expected href in link", true))?;
+                        .ok_or(Error::html(&format!("expected href in link: {:?}", link), true))?;
                     chapterlist
                         .0
                         .push(format!("https://www.royalroad.com{}", uri));

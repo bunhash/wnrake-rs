@@ -1,4 +1,4 @@
-//! ranobes.top parser
+//! ranobes.net parser
 
 use crate::{
     book::{BookInfo, Chapter, UrlCache},
@@ -63,7 +63,7 @@ impl Downloader for RanobesParser {
                 .ok_or(Error::html("no href in link", true))?;
             (
                 total_toc_pages,
-                format!("https://ranobes.top{}", more_chapters),
+                format!("https://ranobes.net{}", more_chapters),
             )
         };
 
@@ -251,7 +251,7 @@ impl Parser for RanobesParser {
                 let url = el
                     .attr("href")
                     .ok_or(Error::html("no href in link", false))?;
-                Ok(Some(url.replace("ranobes.net", "ranobes.top")))
+                Ok(Some(url.replace("ranobes.top", "ranobes.net")))
             }
             None => Ok(None),
         }
