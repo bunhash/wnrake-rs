@@ -11,6 +11,7 @@ use reqwest::Url;
 mod fanfiction_net;
 mod phrases;
 mod lightnovelpub_org;
+mod novelfull_net;
 mod ranobes_net;
 mod ranobes_top;
 mod royalroad_com;
@@ -19,6 +20,7 @@ mod utils;
 
 pub use fanfiction_net::FanfictionParser;
 pub use lightnovelpub_org::LightNovelPubParser;
+pub use novelfull_net::NovelFullNetParser;
 pub use ranobes_net::RanobesParser as RanobesParserNet;
 pub use ranobes_top::RanobesParser;
 pub use royalroad_com::RoyalRoadParser;
@@ -57,6 +59,7 @@ pub trait Parser {
 pub enum WnParser {
     Fanfiction(FanfictionParser),
     LightNovelPub(LightNovelPubParser),
+    NovelFullNet(NovelFullNetParser),
     Ranobes(RanobesParser),
     RanobesNet(RanobesParserNet),
     RoyalRoad(RoyalRoadParser),
@@ -71,6 +74,9 @@ impl TryFrom<&str> for WnParser {
             Some("fanfiction.net") => Ok(WnParser::Fanfiction(FanfictionParser)),
             Some("www.fanfiction.net") => Ok(WnParser::Fanfiction(FanfictionParser)),
             Some("lightnovelpub.org") => Ok(WnParser::LightNovelPub(LightNovelPubParser)),
+            Some("www.lightnovelpub.org") => Ok(WnParser::LightNovelPub(LightNovelPubParser)),
+            Some("novelfull.net") => Ok(WnParser::NovelFullNet(NovelFullNetParser)),
+            Some("www.novelfull.net") => Ok(WnParser::NovelFullNet(NovelFullNetParser)),
             Some("ranobes.net") => Ok(WnParser::RanobesNet(RanobesParserNet)),
             Some("www.ranobes.net") => Ok(WnParser::RanobesNet(RanobesParserNet)),
             Some("ranobes.top") => Ok(WnParser::Ranobes(RanobesParser)),
@@ -90,6 +96,7 @@ impl Downloader for WnParser {
         match self {
             WnParser::Fanfiction(parser) => parser.get_book_info(client, url).await,
             WnParser::LightNovelPub(parser) => parser.get_book_info(client, url).await,
+            WnParser::NovelFullNet(parser) => parser.get_book_info(client, url).await,
             WnParser::Ranobes(parser) => parser.get_book_info(client, url).await,
             WnParser::RanobesNet(parser) => parser.get_book_info(client, url).await,
             WnParser::RoyalRoad(parser) => parser.get_book_info(client, url).await,
@@ -106,6 +113,7 @@ impl Downloader for WnParser {
         match self {
             WnParser::Fanfiction(parser) => parser.get_chapterlist(client, url, html).await,
             WnParser::LightNovelPub(parser) => parser.get_chapterlist(client, url, html).await,
+            WnParser::NovelFullNet(parser) => parser.get_chapterlist(client, url, html).await,
             WnParser::Ranobes(parser) => parser.get_chapterlist(client, url, html).await,
             WnParser::RanobesNet(parser) => parser.get_chapterlist(client, url, html).await,
             WnParser::RoyalRoad(parser) => parser.get_chapterlist(client, url, html).await,
@@ -117,6 +125,7 @@ impl Downloader for WnParser {
         match self {
             WnParser::Fanfiction(parser) => parser.get_chapter(client, url).await,
             WnParser::LightNovelPub(parser) => parser.get_chapter(client, url).await,
+            WnParser::NovelFullNet(parser) => parser.get_chapter(client, url).await,
             WnParser::Ranobes(parser) => parser.get_chapter(client, url).await,
             WnParser::RanobesNet(parser) => parser.get_chapter(client, url).await,
             WnParser::RoyalRoad(parser) => parser.get_chapter(client, url).await,
@@ -130,6 +139,7 @@ impl Parser for WnParser {
         match self {
             WnParser::Fanfiction(parser) => parser.parse_book_info(url, html),
             WnParser::LightNovelPub(parser) => parser.parse_book_info(url, html),
+            WnParser::NovelFullNet(parser) => parser.parse_book_info(url, html),
             WnParser::Ranobes(parser) => parser.parse_book_info(url, html),
             WnParser::RanobesNet(parser) => parser.parse_book_info(url, html),
             WnParser::RoyalRoad(parser) => parser.parse_book_info(url, html),
@@ -141,6 +151,7 @@ impl Parser for WnParser {
         match self {
             WnParser::Fanfiction(parser) => parser.parse_chapter(html),
             WnParser::LightNovelPub(parser) => parser.parse_chapter(html),
+            WnParser::NovelFullNet(parser) => parser.parse_chapter(html),
             WnParser::Ranobes(parser) => parser.parse_chapter(html),
             WnParser::RanobesNet(parser) => parser.parse_chapter(html),
             WnParser::RoyalRoad(parser) => parser.parse_chapter(html),
@@ -152,6 +163,7 @@ impl Parser for WnParser {
         match self {
             WnParser::Fanfiction(parser) => parser.next_page(html),
             WnParser::LightNovelPub(parser) => parser.next_page(html),
+            WnParser::NovelFullNet(parser) => parser.next_page(html),
             WnParser::Ranobes(parser) => parser.next_page(html),
             WnParser::RanobesNet(parser) => parser.next_page(html),
             WnParser::RoyalRoad(parser) => parser.next_page(html),

@@ -9,7 +9,6 @@ use crate::{
 };
 use async_trait::async_trait;
 use scraper::{Html, Selector};
-use serde_json::Value;
 
 #[derive(Clone, Debug)]
 pub struct LightNovelPubParser;

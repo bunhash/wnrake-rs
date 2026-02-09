@@ -18,6 +18,9 @@ pub fn url_to_filename(index: usize, url: &str) -> String {
         .rsplit("/")
         .next()
         .unwrap_or("chapter")
+        .split("?")
+        .next()
+        .unwrap_or("chapter")
         .replace(" ", "");
     format!("{:04}-{}", index, filename)
 }

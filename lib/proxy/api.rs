@@ -97,6 +97,7 @@ impl Api {
         let _ = self.put_state("stopped").await;
         std::thread::sleep(Duration::from_millis(1000));
         self.wait_for_status(ProxyStatus::Stopped, seconds).await?;
+        let _ = self.put_state("running").await;
         std::thread::sleep(Duration::from_millis(1000));
         self.wait_for_status(ProxyStatus::Running, seconds).await?;
         std::thread::sleep(Duration::from_millis(1000));
