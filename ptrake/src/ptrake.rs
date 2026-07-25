@@ -49,6 +49,14 @@ struct Cli {
     #[arg(long, value_name = "NAME")]
     proxy: Option<String>,
 
+    /// Username
+    #[arg(short = 'u', long)]
+    username: String,
+
+    /// Password
+    #[arg(short = 'p', long)]
+    password: String,
+
     /// Command
     #[command(subcommand)]
     command: Command,
@@ -131,7 +139,7 @@ async fn dispatcher() -> Result<(), Error> {
 
     // Dispatch
     match &command {
-        Command::Debug(cmd) => cmd.execute(&config).await,
+        Command::Debug(cmd) => cmd.execute(&cli.username, &cli.password, &config).await,
     }
 }
 

@@ -1,11 +1,14 @@
 //! Configuration File
 
 use crate::{
-    cache::Cache,
     client::Client,
     error::Error,
     proxy::{Api, Proxy},
 };
+
+#[cfg(feature = "cache")]
+use crate::Cache;
+
 use config::{File, FileFormat};
 use serde::Deserialize;
 use std::collections::{hash_map::Keys, HashMap};
@@ -90,6 +93,7 @@ impl Config {
         self.proxies.keys()
     }
 
+    #[cfg(feature = "cache")]
     /// Builds a `Cache`
     pub fn to_cache(&self) -> Result<Cache, Error> {
         match self.cache.as_ref() {

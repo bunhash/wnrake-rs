@@ -41,8 +41,8 @@ impl fmt::Display for Error {
     }
 }
 
-impl From<crawler::error::Error> for Error {
-    fn from(error: crawler::error::Error) -> Error {
+impl From<crawler::Error> for Error {
+    fn from(error: crawler::Error) -> Error {
         Error {
             error_type: ErrorType::Crawler,
             fatal: error.fatal,

@@ -1,7 +1,7 @@
 //! debug command
 
 use crate::error::Error;
-use crawler::client::Client;
+use crawler::Client;
 use scraper::{Html, Selector};
 use serde_json::json;
 
@@ -16,7 +16,6 @@ impl Session {
     pub fn new(client: Client) -> Self {
         log::debug!("Solver={}", client.solver());
         log::debug!("Proxy={:?}", client.proxy());
-        log::debug!("Cache={:?}", client.cache());
         Session { client }
     }
 

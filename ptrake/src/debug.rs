@@ -10,11 +10,14 @@ use std::io::{self, Write};
 pub struct Debug;
 
 impl Debug {
-    pub async fn execute<'a>(&self, config: &Config) -> Result<(), Error> {
+    pub async fn execute<'a>(
+        &self,
+        username: &str,
+        password: &str,
+        config: &Config,
+    ) -> Result<(), Error> {
         let mut session = Session::new(config.to_client()?);
-        session
-            .login("novels@bhmail.me", "S@woXM9PkFdB^n77XWeP")
-            .await?;
+        session.login(username, password).await?;
         let mut buffer = String::new();
         io::stdout().write(b"Press [Enter] ")?;
         io::stdout().flush()?;
