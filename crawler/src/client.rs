@@ -124,14 +124,6 @@ impl Client {
             .await
     }
 
-    /// Convenience function for sending JSON as POST data
-    pub async fn json<S>(&mut self, url: &str, json: S) -> Result<Solution, Error>
-    where
-        S: ToString,
-    {
-        self.request(&Request::post(url).json(json).build()).await
-    }
-
     /// Attempt to recover by resetting the session (and reconnecting the VPN)
     pub async fn recover(&mut self, seconds: u64) -> Result<(), Error> {
         self.destroy_session().await?;

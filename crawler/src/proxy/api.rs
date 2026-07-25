@@ -11,8 +11,8 @@ use tokio::time::timeout;
 
 #[derive(Clone, Debug)]
 pub struct Api {
-    url: String,
-    credentials: Option<Credentials>,
+    pub url: String,
+    pub credentials: Option<Credentials>,
 }
 
 impl fmt::Display for Api {
@@ -44,16 +44,6 @@ impl Api {
             url: url.into(),
             credentials: Some(Credentials::api_key(api_key)),
         }
-    }
-
-    /// Returns a reference to the URL
-    pub fn url(&self) -> &str {
-        self.url.as_ref()
-    }
-
-    /// Returns a reference to the control server
-    pub fn credentials(&self) -> Option<&Credentials> {
-        self.credentials.as_ref()
     }
 
     /// Gets the status of the proxy

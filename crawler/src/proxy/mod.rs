@@ -33,13 +33,20 @@ impl fmt::Display for ProxyStatus {
 
 #[derive(Clone, Debug, Serialize)]
 pub struct Proxy {
-    pub(crate) url: String,
+    /// Proxy URL
+    pub url: String,
+
+    /// Proxy username
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) username: Option<String>,
+    pub username: Option<String>,
+
+    /// Proxy password
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) password: Option<String>,
+    pub password: Option<String>,
+
+    /// Proxy `Api`
     #[serde(skip_serializing)]
-    pub(crate) api: Option<Api>,
+    pub api: Option<Api>,
 }
 
 impl Proxy {
@@ -66,26 +73,6 @@ impl Proxy {
     /// Creates a proxy builder
     pub fn builder(url: &str) -> ProxyBuilder {
         ProxyBuilder::new(url)
-    }
-
-    /// Returns a reference to the URL
-    pub fn url(&self) -> &str {
-        self.url.as_ref()
-    }
-
-    /// Returns a reference to the username
-    pub fn username(&self) -> Option<&str> {
-        self.username.as_deref()
-    }
-
-    /// Returns a reference to the password
-    pub fn password(&self) -> Option<&str> {
-        self.password.as_deref()
-    }
-
-    /// Returns a reference to the API URL
-    pub fn api(&self) -> Option<&Api> {
-        self.api.as_ref()
     }
 
     /// Returns the public IP, if possible

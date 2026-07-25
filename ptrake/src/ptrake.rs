@@ -119,7 +119,7 @@ async fn dispatcher() -> Result<(), Error> {
     } else if cli.verbose {
         builder
             .filter_level(LevelFilter::Info)
-            .filter(Some("crate"), LevelFilter::Debug)
+            .filter(Some("ptrake"), LevelFilter::Debug)
             .filter(Some("crawler"), LevelFilter::Debug);
     } else {
         builder.filter_level(LevelFilter::Info);
@@ -145,7 +145,10 @@ async fn dispatcher() -> Result<(), Error> {
 
 fn main() {
     std::process::exit(match dispatcher() {
-        Err(_) => 1,
+        Err(e) => {
+            log::error!("{}", e);
+            1
+        }
         Ok(_) => 0,
     })
     /*

@@ -239,14 +239,6 @@ impl RequestBuilder {
         self
     }
 
-    pub fn json<S>(mut self, json: S) -> Self
-    where
-        S: ToString,
-    {
-        self.0.post_data = Some(json.to_string());
-        self
-    }
-
     pub fn build(self) -> Request {
         self.0
     }

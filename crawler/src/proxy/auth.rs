@@ -5,8 +5,8 @@
 //! [https://github.com/qdm12/gluetun](https://github.com/qdm12/gluetun)
 
 use crate::error::Error;
-use base64::{Engine, engine::general_purpose::STANDARD};
-use reqwest::header::{AUTHORIZATION, HeaderMap, HeaderName, HeaderValue};
+use base64::{engine::general_purpose::STANDARD, Engine};
+use reqwest::header::{HeaderMap, HeaderName, HeaderValue, AUTHORIZATION};
 
 #[derive(Clone, Debug)]
 pub enum Credentials {
@@ -48,8 +48,8 @@ impl Credentials {
 
 #[derive(Clone, Debug)]
 pub struct BasicAuth {
-    username: String,
-    password: String,
+    pub username: String,
+    pub password: String,
 }
 
 impl BasicAuth {
@@ -59,14 +59,6 @@ impl BasicAuth {
             username: username.into(),
             password: password.into(),
         }
-    }
-
-    pub fn username(&self) -> &str {
-        self.username.as_str()
-    }
-
-    pub fn password(&self) -> &str {
-        self.password.as_str()
     }
 
     /// Encodes the header value. For gluetun, use `to_string()`.

@@ -7,7 +7,7 @@ use crate::{
 };
 
 #[cfg(feature = "cache")]
-use crate::Cache;
+use crate::cache::Cache;
 
 use config::{File, FileFormat};
 use serde::Deserialize;

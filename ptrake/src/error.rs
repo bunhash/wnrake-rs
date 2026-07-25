@@ -10,11 +10,14 @@ pub enum ErrorType {
     /// Html errors
     Html,
 
-    /// Invalid credentials
-    InvalidCredentials,
-
     /// IO errors
     Io,
+
+    /// Login errors
+    Login,
+
+    /// Reqwest errors
+    Reqwest,
 }
 
 impl fmt::Display for ErrorType {
@@ -22,8 +25,9 @@ impl fmt::Display for ErrorType {
         match self {
             ErrorType::Crawler => f.write_str("crawler"),
             ErrorType::Html => f.write_str("html"),
-            ErrorType::InvalidCredentials => f.write_str("invalid credentials"),
             ErrorType::Io => f.write_str("io"),
+            ErrorType::Login => f.write_str("login"),
+            ErrorType::Reqwest => f.write_str("reqwest"),
         }
     }
 }
@@ -48,6 +52,16 @@ impl From<crawler::Error> for Error {
             fatal: error.fatal,
             message: format!("{}", error),
         }
+    }
+}
+
+impl From<reqwest::Error> for Error {
+    fn from(error: reqwest::Error) -> Error {
+        let mut err: &dyn std::error::Error = &error;
+        while let Some(source) = err.source() {
+            err = source;
+        }
+        Error::reqwest(err)
     }
 }
 
@@ -80,17 +94,25 @@ impl Error {
         }
     }
 
-    pub fn invalid_credentials(msg: impl fmt::Display) -> Error {
+    pub fn io(msg: impl fmt::Display) -> Error {
         Error {
-            error_type: ErrorType::InvalidCredentials,
+            error_type: ErrorType::Io,
             fatal: true,
             message: format!("{}", msg),
         }
     }
 
-    pub fn io(msg: impl fmt::Display) -> Error {
+    pub fn login(msg: impl fmt::Display) -> Error {
         Error {
-            error_type: ErrorType::Io,
+            error_type: ErrorType::Login,
+            fatal: true,
+            message: format!("{}", msg),
+        }
+    }
+
+    pub fn reqwest(msg: impl fmt::Display) -> Error {
+        Error {
+            error_type: ErrorType::Reqwest,
             fatal: true,
             message: format!("{}", msg),
         }
